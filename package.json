@@ -1,0 +1,21 @@
+{
+  "name": "skope-kitchens-server",
+  "version": "1.0.0",
+  "description": "Backend server for Skope Kitchens Vendor Portal",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.0.3",
+    "nodemailer": "^6.10.1",
+    "openai": "^6.9.1"
+  }
+}
