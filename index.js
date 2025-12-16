@@ -5,6 +5,7 @@ import connectDB from './config/db.js'
 import authRoutes from './routes/authRoutes.js'
 import eligibilityRoutes from './routes/eligibilityRoutes.js'
 import productsRoute from './routes/productsRoute.js'
+import mongoose from 'mongoose'
 
 dotenv.config()
 connectDB()
