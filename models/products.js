@@ -6,6 +6,6 @@ const ProductSchema = new mongoose.Schema({
     price:{type:Number, required: true},
     suppliername:{type:String, required:true},
     category:{type:String, required:true},
-}, {timestamps: true})
+}, {timestamps: true, collection: "raw material"})
 
 export default mongoose.model('Product', ProductSchema)
