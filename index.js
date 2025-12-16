@@ -40,6 +40,17 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/eligibility', eligibilityRoutes)
 app.use('/api/products', productsRoute)
+app.get("/debug/db", async (req, res) => {
+  const dbName = mongoose.connection.db.databaseName;
+  const collections = await mongoose.connection.db
+    .listCollections()
+    .toArray();
+
+  res.json({
+    database: dbName,
+    collections: collections.map(c => c.name)
+  });
+});
 
 const PORT = process.env.PORT || 5000
 app.listen(PORT, () => {
