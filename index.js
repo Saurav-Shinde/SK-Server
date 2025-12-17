@@ -13,7 +13,7 @@ connectDB()
 
 const app = express()
 
-const rawOrigins = process.env.CLIENT_ORIGIN || 'http://localhost:3001'
+const rawOrigins = process.env.CLIENT_ORIGIN || 'http://localhost:3000'
 const allowedOrigins = rawOrigins.split(',').map(s => s.trim()).filter(Boolean)
 
 app.use((req, res, next) => {
