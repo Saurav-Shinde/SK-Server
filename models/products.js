@@ -1,11 +1,20 @@
-import mongoose from 'mongoose'
+import mongoose from "mongoose";
 
-const ProductSchema = new mongoose.Schema({
+const ProductSchema = new mongoose.Schema(
+  {
+    "Supplier Item Name": String,
+    "Supplier SKU": String,
+    "Supplier Name": String,
+    "Category": String,
+    "Supplier Qty": Number,
+    "Supplier Unit Cost": Number,
+    image_url: String
+  },
+  {
+    strict: false,          // 🔥 CRITICAL
+    timestamps: true,
+    collection: "products"
+  }
+);
 
-    name:{type: String, required: true},
-    price:{type:Number, required: true},
-    suppliername:{type:String, required:true},
-    category:{type:String, required:true},
-}, {timestamps: true, collection: "products"})
-
-export default mongoose.model('Product', ProductSchema)
+export default mongoose.model("Product", ProductSchema);
