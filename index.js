@@ -6,7 +6,7 @@ import authRoutes from './routes/authRoutes.js'
 import eligibilityRoutes from './routes/eligibilityRoutes.js'
 import productsRoute from './routes/productsRoute.js'
 import mongoose from 'mongoose'
-import ristaRoutes from "./routes/dashboard.routes.js";
+import dashboardRoutes from "./routes/dashboard.routes.js";
 
 dotenv.config()
 connectDB()
@@ -42,7 +42,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/eligibility', eligibilityRoutes)
 app.use('/api/products', productsRoute)
-app.use("/api/dashboard", ristaRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 app.get("/debug/db", async (req, res) => {
   const dbName = mongoose.connection.db.databaseName;
   const collections = await mongoose.connection.db

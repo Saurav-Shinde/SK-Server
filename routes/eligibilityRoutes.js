@@ -1,11 +1,10 @@
-
-// backend/Routes/eligibilityRoutes.js
-
 import express from 'express'
 import EligibilitySubmission from '../models/eligibility.js'
 import { scoreEligibility } from '../utils/scoreEligibility.js'
 import { generateAnalysisSummary } from '../utils/geminiService.js'
 import { sendEligibilityEmails } from '../utils/emailService.js'
+import Brand from '../models/brand.js'
+import User from '../models/user.js'
 
 const router = express.Router()
 
@@ -16,7 +15,9 @@ router.post('/', async (req, res) => {
   try {
     const payload = { ...req.body }
 
-    // Required fields (must be present in the request body)
+    // ----------------------------------------------------
+    // 0) Validate required fields
+    // ----------------------------------------------------
     const requiredFields = [
       'brandName',
       'locationMapping',
@@ -36,8 +37,6 @@ router.post('/', async (req, res) => {
       'multipleDeliveries',
       'equipmentAvailability',
       'howDidYouHear',
-
-      // these are also required in your schema
       'launchCapex',
       'smallwaresCost',
       'additionalSpaceRequired',
@@ -47,7 +46,6 @@ router.post('/', async (req, res) => {
       'specialReportingIntegrations',
     ]
 
-    // Basic presence check (empty string / undefined / null)
     const missingField = requiredFields.find(
       (field) =>
         payload[field] === undefined ||
@@ -61,36 +59,26 @@ router.post('/', async (req, res) => {
         .json({ message: `Field "${missingField}" is required.` })
     }
 
-    // Cast numeric fields
+    // ----------------------------------------------------
+    // 1) Normalize & cast data
+    // ----------------------------------------------------
     numericFields.forEach((field) => {
-      if (
-        payload[field] !== undefined &&
-        payload[field] !== null &&
-        payload[field] !== ''
-      ) {
+      if (payload[field] !== undefined) {
         const num = Number(payload[field])
-        if (!Number.isNaN(num)) {
-          payload[field] = num
-        }
+        if (!Number.isNaN(num)) payload[field] = num
       }
     })
 
-    // Normalize some fields
     if (typeof payload.brandName === 'string') {
       payload.brandName = payload.brandName.trim()
     }
 
-    if (
-      payload.submittedByEmail &&
-      typeof payload.submittedByEmail === 'string'
-    ) {
-      payload.submittedByEmail = payload.submittedByEmail
-        .toLowerCase()
-        .trim()
+    if (payload.submittedByEmail) {
+      payload.submittedByEmail = payload.submittedByEmail.toLowerCase().trim()
     }
 
     // ----------------------------------------------------
-    // 1) Calculate eligibility score
+    // 2) Calculate eligibility score
     // ----------------------------------------------------
     const scoreResult = scoreEligibility(payload)
     const rawScore =
@@ -98,11 +86,11 @@ router.post('/', async (req, res) => {
       scoreResult.total_score_1_to_10 ??
       0
 
-    // keep your existing threshold logic (>= 8.5)
     const meetsThreshold = rawScore >= 8.5
+    const onboardingStatus = meetsThreshold ? 'ONBOARDED' : 'NOT_ONBOARDED'
 
     // ----------------------------------------------------
-    // 1.1) Derive tier / band messaging
+    // 3) Tier calculation
     // ----------------------------------------------------
     let tier = ''
     let tierLabel = ''
@@ -112,43 +100,36 @@ router.post('/', async (req, res) => {
       tier = 'tier_1'
       tierLabel = 'Needs Significant Improvement'
       tierMessage =
-        'Your current score indicates the brand is not yet ready for onboarding. We recommend working on core performance areas and revisiting after improvements.'
-    } else if (rawScore >= 4 && rawScore < 6) {
+        'Your brand is not yet ready for onboarding. Improve core metrics and reapply.'
+    } else if (rawScore < 6) {
       tier = 'tier_2'
       tierLabel = 'Promising but Needs Improvement'
       tierMessage =
-        'Your score is good, but there is still room for improvement. Please schedule a call with our internal team to understand how you can meet the onboarding criteria.'
-    } else if (rawScore >= 6 && rawScore < 8) {
+        'Your brand shows promise but needs improvements to qualify.'
+    } else if (rawScore < 8) {
       tier = 'tier_3'
       tierLabel = 'Strong Candidate'
       tierMessage =
-        'Your brand is performing well and is close to onboarding readiness. A discussion with our team can help unlock the remaining potential.'
+        'Your brand is strong and close to onboarding readiness.'
     } else {
       tier = 'tier_4'
       tierLabel = 'Top Tier Brand'
       tierMessage =
-        'Excellent performance! Your brand falls in our highest tier. Our team will reach out to complete onboarding, or you can schedule a call at your convenience.'
+        'Excellent performance! Your brand qualifies for onboarding.'
     }
 
-    const onboardingStatus = meetsThreshold ? 'ONBOARDED' : 'NOT_ONBOARDED'
-
     // ----------------------------------------------------
-    // 2) Generate AI analysis summary with Gemini
+    // 4) AI summary
     // ----------------------------------------------------
     let aiAnalysisSummary = ''
     try {
       aiAnalysisSummary = await generateAnalysisSummary(payload, scoreResult)
-    } catch (error) {
-      console.error('Failed to generate AI summary:', error)
-
-      const { total_score_0_to_10 = rawScore, brand_name } = scoreResult
-      aiAnalysisSummary = meetsThreshold
-        ? `Your brand "${brand_name}" demonstrates excellent consistency across mapping, operations, and expansion potential. With a score of ${total_score_0_to_10}/10, your current scale and partner portfolio align perfectly with Skope Kitchens standards.`
-        : `We've reviewed your brand "${brand_name}" and identified several areas that need attention. With a score of ${total_score_0_to_10}/10, we recommend addressing the highlighted gaps in your profile before resubmission.`
+    } catch (err) {
+      aiAnalysisSummary = `Your brand scored ${rawScore}/10 based on operational and growth metrics.`
     }
 
     // ----------------------------------------------------
-    // 3) Attach scoring + AI summary + tier info to payload for DB
+    // 5) Attach derived data to payload
     // ----------------------------------------------------
     payload.totalScore = rawScore
     payload.meetsThreshold = meetsThreshold
@@ -161,12 +142,36 @@ router.post('/', async (req, res) => {
     payload.onboardingStatus = onboardingStatus
 
     // ----------------------------------------------------
-    // 4) Save submission to MongoDB
+    // 6) Save eligibility submission
     // ----------------------------------------------------
     const submission = await EligibilitySubmission.create(payload)
 
     // ----------------------------------------------------
-    // 5) Fire emails (non-blocking for client)
+    // 7) 🔥 AUTO-CREATE BRAND IF APPROVED
+    // ----------------------------------------------------
+    if (meetsThreshold) {
+      let brand = await Brand.findOne({ brandName: payload.brandName })
+
+      if (!brand) {
+        brand = await Brand.create({
+          brandName: payload.brandName,
+          status: 'Approved',
+          eligibilityScore: rawScore,
+          createdBy: submission.submittedBy,
+        })
+      }
+
+      if (submission.submittedBy) {
+        await User.findByIdAndUpdate(
+          submission.submittedBy,
+          { brandName: payload.brandName },
+          { new: true }
+        )
+      }
+    }
+
+    // ----------------------------------------------------
+    // 8) Send emails (non-blocking)
     // ----------------------------------------------------
     try {
       await sendEligibilityEmails({
@@ -178,21 +183,18 @@ router.post('/', async (req, res) => {
         tierMessage,
         onboardingStatus,
       })
-    } catch (emailError) {
-      console.error('Failed to send eligibility emails:', emailError)
+    } catch (emailErr) {
+      console.error('Email sending failed:', emailErr)
     }
 
     // ----------------------------------------------------
-    // 6) Respond to client
+    // 9) Final response (ONLY ONE RESPONSE)
     // ----------------------------------------------------
-    res.status(201).json({
+    return res.status(201).json({
       message: 'Eligibility form submitted successfully.',
       submissionId: submission._id,
       score: rawScore,
       meetsThreshold,
-      decision: scoreResult.decision,
-      sectionScores: scoreResult.section_scores,
-      aiAnalysisSummary,
       tier,
       tierLabel,
       tierMessage,
@@ -200,7 +202,7 @@ router.post('/', async (req, res) => {
     })
   } catch (error) {
     console.error('Eligibility submission error:', error)
-    res.status(500).json({
+    return res.status(500).json({
       message: 'Unable to submit eligibility form. Please try again.',
     })
   }

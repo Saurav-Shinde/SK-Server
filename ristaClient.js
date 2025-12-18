@@ -1,43 +1,40 @@
-// ristaClient.js
-import axios from "axios";
-import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
+import axios from 'axios'
+import jwt from 'jsonwebtoken'
 
-dotenv.config();
+const BASE_URL = 'https://api.ristaapps.com/v1'
 
-const {
-  RISTA_API_KEY,
-  RISTA_SECRET_KEY,
-  RISTA_BASE_URL
-} = process.env;
-
-if (!RISTA_API_KEY || !RISTA_SECRET_KEY) {
-  throw new Error("Rista API Key or Secret missing in env");
-}
-
-// 🔐 Generate JWT (NEW token per request)
-function generateJwtToken() {
+const createRistaToken = () => {
   const payload = {
-    iss: RISTA_API_KEY,
-    iat: Math.floor(Date.now() / 1000)
-  };
+    iss: process.env.RISTA_API_KEY,
+    iat: Math.floor(Date.now() / 1000),
+  }
 
-  return jwt.sign(payload, RISTA_SECRET_KEY);
+  return jwt.sign(payload, process.env.RISTA_SECRET_KEY)
 }
 
-// 🚀 Axios instance
-export async function ristaRequest(method, endpoint, data = null, params = null) {
-  const token = generateJwtToken();
+const ristaApi = axios.create({
+  baseURL: BASE_URL,
+})
 
-  return axios({
-    method,
-    url: `${RISTA_BASE_URL}${endpoint}`,
-    headers: {
-      "x-api-key": RISTA_API_KEY,
-      "x-api-token": token,
-      "Content-Type": "application/json"
-    },
-    data,
-    params
-  });
+ristaApi.interceptors.request.use((config) => {
+  const token = createRistaToken()
+  config.headers['x-api-key'] = process.env.RISTA_API_KEY
+  config.headers['x-api-token'] = token
+  return config
+})
+
+export const ristaClient = {
+  async getOrders(outletId) {
+    const res = await ristaApi.get(`/orders`, {
+      params: { outlet_id: outletId },
+    })
+    return res.data.orders || []
+  },
+
+  async getInventory(outletId) {
+    const res = await ristaApi.get(`/inventory`, {
+      params: { outlet_id: outletId },
+    })
+    return res.data.items || []
+  },
 }

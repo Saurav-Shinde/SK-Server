@@ -5,23 +5,33 @@ import User from '../models/user.js'
 
 const router = express.Router()
 
-const createToken = (userId) => {
+const createToken = (user) => {
   const secret = process.env.JWT_SECRET || 'development-secret'
-  return jwt.sign({ userId }, secret, { expiresIn: '7d' })
+console.log('✅ authRoutes loaded')
+
+  return jwt.sign(
+    {
+      userId: user._id,
+      brandName: user.brandName, // ✅ CRITICAL
+    },
+    secret,
+    { expiresIn: '7d' }
+  )
 }
+
 
 const sanitizeUser = (user) => ({
   id: user._id,
   name: user.name,
-  companyName: user.companyName,
+  brandName: user.brandName,
   email: user.email,
 })
 
 router.post('/signup', async (req, res) => {
   try {
-    const { name, companyName, email, password } = req.body
+    const { name, brandName, email, password } = req.body
 
-    if (!name || !companyName || !email || !password) {
+    if (!name || !brandName || !email || !password) {
       return res.status(400).json({ message: 'All fields are required.' })
     }
 
@@ -34,12 +44,12 @@ router.post('/signup', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10)
     const user = await User.create({
       name,
-      companyName,
+      brandName,
       email: normalizedEmail,
       password: hashedPassword,
     })
 
-    const token = createToken(user._id)
+    const token = createToken(user)
     res.status(201).json({ token, user: sanitizeUser(user) })
   } catch (error) {
     console.error('Signup error:', error)
@@ -65,7 +75,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password.' })
     }
 
-    const token = createToken(user._id)
+    const token = createToken(user)
     res.json({ token, user: sanitizeUser(user) })
   } catch (error) {
     console.error('Login error:', error)

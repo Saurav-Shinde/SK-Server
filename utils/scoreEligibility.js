@@ -267,7 +267,7 @@ export const scoreEligibility = (submission) => {
     100
 
   const totalScore0to10 = totalPercent / 10
-  const meetsThreshold = totalScore0to10 >= 8.5
+  const meetsThreshold = totalScore0to10 >= 5.5
   const decision = meetsThreshold ? 'MOVE_FORWARD' : 'RE_EVALUATE'
 
   return {
