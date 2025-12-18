@@ -7,6 +7,7 @@ import eligibilityRoutes from './routes/eligibilityRoutes.js'
 import productsRoute from './routes/productsRoute.js'
 import mongoose from 'mongoose'
 import dashboardRoutes from "./routes/dashboard.routes.js";
+import paymentRoutes from "./routes/payment.js";
 
 dotenv.config()
 connectDB()
@@ -43,6 +44,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/eligibility', eligibilityRoutes)
 app.use('/api/products', productsRoute)
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/payment", paymentRoutes)
 app.get("/debug/db", async (req, res) => {
   const dbName = mongoose.connection.db.databaseName;
   const collections = await mongoose.connection.db
