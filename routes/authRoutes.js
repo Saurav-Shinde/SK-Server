@@ -7,12 +7,11 @@ const router = express.Router()
 
 const createToken = (user) => {
   const secret = process.env.JWT_SECRET || 'development-secret'
-console.log('✅ authRoutes loaded')
 
   return jwt.sign(
     {
       userId: user._id,
-      brandName: user.brandName, // ✅ CRITICAL
+      brandName: user.brandName,
     },
     secret,
     { expiresIn: '7d' }
@@ -20,18 +19,20 @@ console.log('✅ authRoutes loaded')
 }
 
 
+
 const sanitizeUser = (user) => ({
   id: user._id,
   name: user.name,
   brandName: user.brandName,
   email: user.email,
+  address: user.address,
 })
 
 router.post('/signup', async (req, res) => {
   try {
-    const { name, brandName, email, password } = req.body
+    const { name, brandName, email, password, address } = req.body
 
-    if (!name || !brandName || !email || !password) {
+    if (!name || !brandName || !email || !password || !address) {
       return res.status(400).json({ message: 'All fields are required.' })
     }
 
@@ -47,6 +48,7 @@ router.post('/signup', async (req, res) => {
       brandName,
       email: normalizedEmail,
       password: hashedPassword,
+      address,
     })
 
     const token = createToken(user)
