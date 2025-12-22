@@ -8,7 +8,6 @@ import User from '../models/user.js'
 
 const router = express.Router()
 
-// Fields that should be stored as numbers
 const numericFields = ['deliveryAOV', 'numberOfMenuItems']
 
 router.post('/', async (req, res) => {
@@ -47,20 +46,17 @@ router.post('/', async (req, res) => {
     ]
 
     const missingField = requiredFields.find(
-      (field) =>
-        payload[field] === undefined ||
-        payload[field] === null ||
-        payload[field] === ''
+      (f) => payload[f] === undefined || payload[f] === null || payload[f] === ''
     )
 
     if (missingField) {
-      return res
-        .status(400)
-        .json({ message: `Field "${missingField}" is required.` })
+      return res.status(400).json({
+        message: `Field "${missingField}" is required.`,
+      })
     }
 
     // ----------------------------------------------------
-    // 1) Normalize & cast data
+    // 1) Normalize data
     // ----------------------------------------------------
     numericFields.forEach((field) => {
       if (payload[field] !== undefined) {
@@ -69,28 +65,29 @@ router.post('/', async (req, res) => {
       }
     })
 
-    if (typeof payload.brandName === 'string') {
-      payload.brandName = payload.brandName.trim()
-    }
-
-    if (payload.submittedByEmail) {
-      payload.submittedByEmail = payload.submittedByEmail.toLowerCase().trim()
-    }
+    payload.brandName = payload.brandName?.trim()
+    payload.submittedByEmail =
+      payload.submittedByEmail?.toLowerCase().trim()
 
     // ----------------------------------------------------
-    // 2) Calculate eligibility score
+    // 2) Eligibility scoring
     // ----------------------------------------------------
     const scoreResult = scoreEligibility(payload)
-    const rawScore =
-      scoreResult.total_score_0_to_10 ??
-      scoreResult.total_score_1_to_10 ??
-      0
+    const rawScore = scoreResult.total_score_0_to_10 ?? 0
 
-    const meetsThreshold = rawScore >= 8.5
-    const onboardingStatus = meetsThreshold ? 'ONBOARDED' : 'NOT_ONBOARDED'
+    // ✅ UPDATED: Eligibility gate (single source of truth)
+    const eligibilityPassed = rawScore >= 5.5
+
+    const approvalStatus = eligibilityPassed
+      ? 'APPROVED'
+      : 'REJECTED'
+
+    const operationalStatus = eligibilityPassed
+      ? 'PENDING_SETUP'
+      : 'NOT_ALLOWED'
 
     // ----------------------------------------------------
-    // 3) Tier calculation
+    // 3) Tier calculation (unchanged)
     // ----------------------------------------------------
     let tier = ''
     let tierLabel = ''
@@ -124,32 +121,32 @@ router.post('/', async (req, res) => {
     let aiAnalysisSummary = ''
     try {
       aiAnalysisSummary = await generateAnalysisSummary(payload, scoreResult)
-    } catch (err) {
-      aiAnalysisSummary = `Your brand scored ${rawScore}/10 based on operational and growth metrics.`
+    } catch {
+      aiAnalysisSummary = `Your brand scored ${rawScore}/10 based on submitted data.`
     }
 
     // ----------------------------------------------------
-    // 5) Attach derived data to payload
+    // 5) Attach derived metadata
     // ----------------------------------------------------
     payload.totalScore = rawScore
-    payload.meetsThreshold = meetsThreshold
-    payload.decision = scoreResult.decision
+    payload.eligibilityPassed = eligibilityPassed
+    payload.approvalStatus = approvalStatus
+    payload.operationalStatus = operationalStatus
     payload.sectionScores = scoreResult.section_scores
     payload.aiAnalysisSummary = aiAnalysisSummary
     payload.tier = tier
     payload.tierLabel = tierLabel
     payload.tierMessage = tierMessage
-    payload.onboardingStatus = onboardingStatus
 
     // ----------------------------------------------------
-    // 6) Save eligibility submission
+    // 6) Save submission
     // ----------------------------------------------------
     const submission = await EligibilitySubmission.create(payload)
 
     // ----------------------------------------------------
-    // 7) 🔥 AUTO-CREATE BRAND IF APPROVED
+    // 7) ✅ AUTO-CREATE BRAND IF ELIGIBLE
     // ----------------------------------------------------
-    if (meetsThreshold) {
+    if (eligibilityPassed) {
       let brand = await Brand.findOne({ brandName: payload.brandName })
 
       if (!brand) {
@@ -157,6 +154,7 @@ router.post('/', async (req, res) => {
           brandName: payload.brandName,
           status: 'Approved',
           eligibilityScore: rawScore,
+          operationalStatus: 'PENDING_SETUP', // ✅ NEW
           createdBy: submission.submittedBy,
         })
       }
@@ -171,7 +169,7 @@ router.post('/', async (req, res) => {
     }
 
     // ----------------------------------------------------
-    // 8) Send emails (non-blocking)
+    // 8) Emails (non-blocking)
     // ----------------------------------------------------
     try {
       await sendEligibilityEmails({
@@ -181,24 +179,25 @@ router.post('/', async (req, res) => {
         tier,
         tierLabel,
         tierMessage,
-        onboardingStatus,
+        approvalStatus,
       })
-    } catch (emailErr) {
-      console.error('Email sending failed:', emailErr)
+    } catch (err) {
+      console.error('Email sending failed:', err)
     }
 
     // ----------------------------------------------------
-    // 9) Final response (ONLY ONE RESPONSE)
+    // 9) Final response
     // ----------------------------------------------------
     return res.status(201).json({
       message: 'Eligibility form submitted successfully.',
       submissionId: submission._id,
       score: rawScore,
-      meetsThreshold,
+      eligibilityPassed,
+      approvalStatus,
+      operationalStatus,
       tier,
       tierLabel,
       tierMessage,
-      onboardingStatus,
     })
   } catch (error) {
     console.error('Eligibility submission error:', error)
