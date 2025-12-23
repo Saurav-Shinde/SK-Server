@@ -6,8 +6,12 @@ import authRoutes from './routes/authRoutes.js'
 import eligibilityRoutes from './routes/eligibilityRoutes.js'
 import productsRoute from './routes/productsRoute.js'
 import mongoose from 'mongoose'
-import dashboardRoutes from "./routes/dashboard.routes.js";
-import paymentRoutes from "./routes/payment.js";
+import dashboardRoutes from './routes/dashboard.routes.js'
+import paymentRoutes from './routes/payment.js'
+import adminBrandRoutes from './routes/admin.brand.routes.js'
+import ristaHealthRoutes from './routes/rista.health.routes.js'
+import analyticsRoutes from './routes/analytics.js'
+import brandSettingsRoutes from "./routes/brand.settings.routes.js";
 
 dotenv.config()
 connectDB()
@@ -43,8 +47,12 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/eligibility', eligibilityRoutes)
 app.use('/api/products', productsRoute)
-app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/payment", paymentRoutes)
+app.use('/api/dashboard', dashboardRoutes)
+app.use('/api/payment', paymentRoutes)
+app.use('/api/admin', adminBrandRoutes)
+app.use('/api/rista', ristaHealthRoutes)
+app.use('/api/analytics', analyticsRoutes)
+app.use("/api/brand", brandSettingsRoutes);
 app.get("/debug/db", async (req, res) => {
   const dbName = mongoose.connection.db.databaseName;
   const collections = await mongoose.connection.db

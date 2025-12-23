@@ -11,6 +11,7 @@ const eligibilitySchema = new mongoose.Schema(
     locationMapping: { type: String, required: true },
     brandStrength: { type: String, required: true },
     socialMediaEngagement: { type: String, required: true },
+    ristaOutletId: { type: String, default: null }, // optional manual link
 
     swiggyRating: { type: Number, default: null },
     zomatoRating: { type: Number, default: null },

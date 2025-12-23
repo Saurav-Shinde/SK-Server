@@ -1,104 +1,167 @@
-import express from 'express'
-import { authMiddleware } from '../middleware/auth.js'
-import Brand from '../models/brand.js'
-import { ristaClient } from '../ristaClient.js'
+import express from "express";
+import { authMiddleware } from "../middleware/auth.js";
+import Brand from "../models/brand.js";
+import { ristaClient } from "../ristaClient.js";
 
-const router = express.Router()
+const router = express.Router();
+
+// --------------------------------------
+// Helper: compute KPT (Kitchen Prep Time)
+// --------------------------------------
+const computeKPTMinutes = (sales) => {
+  if (!Array.isArray(sales) || sales.length === 0) return 0;
+
+  const orderKpts = sales
+    .map((sale) => {
+      const items = Array.isArray(sale.items) ? sale.items : [];
+
+      const kotTimes = items
+        .map((i) => i.kotTimestamp)
+        .filter(Boolean)
+        .map((t) => new Date(t).getTime());
+
+      const readyTimes = items
+        .map((i) => i.kdsReady)
+        .filter(Boolean)
+        .map((t) => new Date(t).getTime());
+
+      if (!kotTimes.length || !readyTimes.length) return null;
+
+      const diffMs = Math.max(...readyTimes) - Math.min(...kotTimes);
+      if (diffMs <= 0) return null;
+
+      return diffMs / 60000; // minutes
+    })
+    .filter(Boolean);
+
+  if (!orderKpts.length) return 0;
+
+  const avg = orderKpts.reduce((a, b) => a + b, 0) / orderKpts.length;
+  return Number(avg.toFixed(1));
+};
 
 // -----------------------------
 // DASHBOARD STATS
 // -----------------------------
-router.get('/stats', authMiddleware, async (req, res) => {
+router.get("/stats", authMiddleware, async (req, res) => {
   try {
-    const { brandName } = req.user
+    console.log("[DASHBOARD] stats route hit");
 
-    if (!brandName) {
-      return res.status(400).json({
-        message: 'No brand associated with this user',
-      })
-    }
-
-    // ✅ FIXED: use brandName from JWT
-    const brand = await Brand.findOne({ brandName })
+    const brand = req.brand; // ✅ attached by authMiddleware
 
     if (!brand) {
-      return res.status(404).json({ message: 'Brand not found' })
+      return res.status(401).json({
+        message: "Brand context missing",
+      });
     }
 
-    // 🟡 Brand approved but not yet onboarded in Rista
-    if (!brand.ristaOutletId) {
-      return res.status(200).json({
+    const branch = brand.ristaBranchCode;
+    const period =
+      brand.analyticsPeriod ||
+      req.query.period ||
+      new Date().toISOString().slice(0, 10);
+
+    console.log("[DASHBOARD] using filters:", { branch, period });
+
+    if (!branch || !period) {
+      return res.json({
         brandName: brand.brandName,
         status: brand.status,
-        eligibilityScore: brand.eligibilityScore,
         operational: false,
-        message:
-          'Brand approved but operational data is not available yet',
-      })
+        statsAvailable: false,
+        message: "Please select branch and date",
+      });
     }
 
-    // 🟢 Fetch real-time Rista data
-    const orders = await ristaClient.getOrders(brand.ristaOutletId)
+    // ---------------------------
+    // Analytics summary
+    // ---------------------------
+    let revenue = 0;
+    let totalOrders = 0;
 
-    const totalOrders = orders.length
-    const activeOrders = orders.filter(
-      (o) => o.status === 'active'
-    ).length
+    try {
+      const summary = await ristaClient.getAnalyticsSummary({
+        branch,
+        period,
+      });
 
-    const revenue = orders.reduce(
-      (sum, o) => sum + (o.total_amount || 0),
-      0
-    )
+      console.log("[RISTA] analytics summary:", summary);
+
+      revenue = Number(summary.revenue) || 0;
+      totalOrders = Number(summary.noOfSales) || 0;
+    } catch (err) {
+      console.error(
+        "[RISTA] analytics error:",
+        err?.response?.data || err.message
+      );
+    }
+
+    const averageOrderValue =
+      totalOrders > 0 ? Number((revenue / totalOrders).toFixed(2)) : 0;
+
+    // ---------------------------
+    // Sales page → KPT
+    // ---------------------------
+    let avgKPT = 0;
+    try {
+      const sales = await ristaClient.getSalesPage({
+        branch,
+        period,
+      });
+
+      console.log("[RISTA] sales fetched:", sales.length);
+
+      avgKPT = computeKPTMinutes(sales);
+    } catch (err) {
+      console.error(
+        "[RISTA] sales page error:",
+        err?.response?.data || err.message
+      );
+    }
+
+    console.log("[DASHBOARD] final payload", {
+      revenue,
+      totalOrders,
+      avgKPT,
+    });
 
     return res.json({
       brandName: brand.brandName,
       status: brand.status,
       eligibilityScore: brand.eligibilityScore,
       operational: true,
-      totalOrders,
-      activeOrders,
+      statsAvailable: true,
       revenue,
-    })
+      totalOrders,
+      averageOrderValue,
+      avgKPT,
+    });
   } catch (error) {
-    console.error('Dashboard stats error:', error)
-    return res
-      .status(500)
-      .json({ message: 'Failed to load dashboard stats' })
+    console.error("[DASHBOARD] fatal error:", error);
+    return res.status(500).json({
+      message: "Failed to load dashboard stats",
+    });
   }
-})
+});
 
 // -----------------------------
 // LOW STOCK
 // -----------------------------
-router.get('/low-stock', authMiddleware, async (req, res) => {
+router.get("/low-stock", authMiddleware, async (req, res) => {
   try {
-    const { brandName } = req.user
+    const brand = req.brand;
 
-    if (!brandName) {
-      return res.status(400).json({
-        message: 'No brand associated with this user',
-      })
-    }
-
-    // ✅ FIXED
-    const brand = await Brand.findOne({ brandName })
-
-    if (!brand) {
-      return res.status(404).json({ message: 'Brand not found' })
-    }
-
-    // 🟡 Not operational yet
-    if (!brand.ristaOutletId) {
-      return res.status(200).json([])
+    if (!brand || !brand.ristaBranchCode) {
+      return res.json([]);
     }
 
     const inventory = await ristaClient.getInventory(
-      brand.ristaOutletId
-    )
+      brand.ristaBranchCode
+    );
 
     const lowStockItems = inventory.filter(
-      (item) => item.quantity < 10
-    )
+      (item) => Number(item.quantity) < 10
+    );
 
     return res.json(
       lowStockItems.map((item) => ({
@@ -106,13 +169,13 @@ router.get('/low-stock', authMiddleware, async (req, res) => {
         quantity: item.quantity,
         unit: item.unit,
       }))
-    )
+    );
   } catch (error) {
-    console.error('Low stock error:', error)
-    return res
-      .status(500)
-      .json({ message: 'Failed to load stock data' })
+    console.error("[LOW STOCK] error:", error);
+    return res.status(500).json({
+      message: "Failed to load stock data",
+    });
   }
-})
+});
 
-export default router
+export default router;

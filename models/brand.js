@@ -1,28 +1,19 @@
-import mongoose from 'mongoose'
+import mongoose from "mongoose";
 
-const brandSchema = new mongoose.Schema(
+const BrandSchema = new mongoose.Schema(
   {
     brandName: { type: String, required: true, unique: true },
+    status: { type: String, default: "Pending" },
 
-    status: {
-      type: String,
-      enum: ['Pending', 'Approved', 'Rejected'],
-      default: 'Pending',
-    },
-
-    eligibilityScore: Number,
-
-    // Rista mapping (can be filled later)
+    // Existing integrations
     ristaOutletId: { type: String, default: null },
     ristaBusinessId: { type: String, default: null },
 
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true,
-    },
+    // ✅ Analytics settings (NEW)
+    ristaBranchCode: { type: String, default: null },
+    analyticsPeriod: { type: String, default: null }, // YYYY-MM or YYYY-MM-DD
   },
   { timestamps: true }
-)
+);
 
-export default mongoose.model('Brand', brandSchema)
+export default mongoose.model("Brand", BrandSchema);

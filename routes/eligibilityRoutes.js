@@ -43,6 +43,7 @@ router.post('/', async (req, res) => {
       'additionalTrainingTravel',
       'launchTravelCosts',
       'specialReportingIntegrations',
+      // ristaOutletId is optional on purpose
     ]
 
     const missingField = requiredFields.find(
@@ -66,6 +67,9 @@ router.post('/', async (req, res) => {
     })
 
     payload.brandName = payload.brandName?.trim()
+    payload.ristaOutletId = payload.ristaOutletId
+      ? String(payload.ristaOutletId).trim()
+      : null
     payload.submittedByEmail =
       payload.submittedByEmail?.toLowerCase().trim()
 
@@ -155,8 +159,13 @@ router.post('/', async (req, res) => {
           status: 'Approved',
           eligibilityScore: rawScore,
           operationalStatus: 'PENDING_SETUP', // ✅ NEW
+          ristaOutletId: payload.ristaOutletId || undefined,
           createdBy: submission.submittedBy,
         })
+      } else if (payload.ristaOutletId) {
+        // If brand already exists and user provided an outlet, store it
+        brand.ristaOutletId = payload.ristaOutletId
+        await brand.save()
       }
 
       if (submission.submittedBy) {
