@@ -12,6 +12,7 @@ import adminBrandRoutes from './routes/admin.brand.routes.js'
 import ristaHealthRoutes from './routes/rista.health.routes.js'
 import analyticsRoutes from './routes/analytics.js'
 import brandSettingsRoutes from "./routes/brand.settings.routes.js";
+import brandProfileRoutes from "./routes/brand.profile.routes.js";
 
 dotenv.config()
 connectDB()
@@ -53,6 +54,7 @@ app.use('/api/admin', adminBrandRoutes)
 app.use('/api/rista', ristaHealthRoutes)
 app.use('/api/analytics', analyticsRoutes)
 app.use("/api/brand", brandSettingsRoutes);
+app.use("/api/brand", brandProfileRoutes);
 app.get("/debug/db", async (req, res) => {
   const dbName = mongoose.connection.db.databaseName;
   const collections = await mongoose.connection.db

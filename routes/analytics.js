@@ -19,14 +19,8 @@ router.get('/sales/summary', async (req, res) => {
       period,
     })
 
-    return res.json({
-      noOfSales: Number(data.noOfSales) || 0,
-      avgSaleAmount: Number(data.avgSaleAmount) || 0,
-      revenue: Number(data.revenue) || 0,
-      netAmount: Number(data.netAmount) || 0,
-      taxTotal: Number(data.taxTotal) || 0,
-      discountTotal: Number(data.discountTotal) || 0,
-    })
+    return res.json(data)
+
   } catch (error) {
     const status = error?.response?.status || 500
     const payload = error?.response?.data || { message: error.message }

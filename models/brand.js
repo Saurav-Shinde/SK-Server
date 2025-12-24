@@ -12,6 +12,9 @@ const BrandSchema = new mongoose.Schema(
     // ✅ Analytics settings (NEW)
     ristaBranchCode: { type: String, default: null },
     analyticsPeriod: { type: String, default: null }, // YYYY-MM or YYYY-MM-DD
+
+    // ✅ Chef mapping (Contact Us)
+    chefName: { type: String, default: '' },
   },
   { timestamps: true }
 );
