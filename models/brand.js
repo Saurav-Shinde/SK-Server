@@ -10,7 +10,7 @@ const BrandSchema = new mongoose.Schema(
     ristaBusinessId: { type: String, default: null },
 
     // ✅ Analytics settings (NEW)
-    ristaBranchCode: { type: String, default: null },
+    ristaBranchCode: [{ type: String, default: null }],
     analyticsPeriod: { type: String, default: null }, // YYYY-MM or YYYY-MM-DD
 
     // ✅ Chef mapping (Contact Us)

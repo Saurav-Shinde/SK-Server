@@ -6,19 +6,26 @@ const router = express.Router();
 
 /**
  * POST /api/brand/settings
- * Save dashboard analytics filters (branchCode + period)
+ * Save dashboard analytics filters (branchCodes[] + period)
  */
 router.post("/settings", authMiddleware, async (req, res) => {
   try {
-    const { branchCode, period } = req.body || {};
+    const { branchCodes, period } = req.body || {};
 
-    if (!branchCode || !period) {
+    if (!Array.isArray(branchCodes) || branchCodes.length === 0) {
       return res.status(400).json({
-        message: "branchCode and period are required",
+        message: "branchCodes must be a non-empty array",
+      });
+    }
+
+    if (!period) {
+      return res.status(400).json({
+        message: "period is required",
       });
     }
 
     const brandId = req.brand?._id;
+
     if (!brandId) {
       return res.status(401).json({
         message: "Brand not found in request context",
@@ -28,7 +35,7 @@ router.post("/settings", authMiddleware, async (req, res) => {
     const updatedBrand = await Brand.findByIdAndUpdate(
       brandId,
       {
-        ristaBranchCode: branchCode.trim(),
+        ristaBranchCodes: branchCodes.map((b) => b.trim()),
         analyticsPeriod: period.trim(),
       },
       { new: true }
@@ -36,7 +43,7 @@ router.post("/settings", authMiddleware, async (req, res) => {
 
     return res.json({
       success: true,
-      branchCode: updatedBrand.ristaBranchCode,
+      branchCodes: updatedBrand.ristaBranchCodes,
       period: updatedBrand.analyticsPeriod,
     });
   } catch (error) {
