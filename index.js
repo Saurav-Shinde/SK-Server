@@ -13,6 +13,7 @@ import ristaHealthRoutes from './routes/rista.health.routes.js'
 import analyticsRoutes from './routes/analytics.js'
 import brandSettingsRoutes from "./routes/brand.settings.routes.js";
 import brandProfileRoutes from "./routes/brand.profile.routes.js";
+import meetingRoutes from './routes/meeting.routes.js'
 
 dotenv.config()
 connectDB()
@@ -24,18 +25,40 @@ const allowedOrigins = rawOrigins.split(',').map(s => s.trim()).filter(Boolean)
 
 app.use((req, res, next) => {
   const origin = req.get('Origin')
-  if (!origin) return next() // allow non-browser requests
+
+  // 👇 PRINT ORIGIN FOR DEBUGGING
+  console.log('Incoming Origin =>', origin || '(no origin header)')
+
+  // Allow requests without Origin (Postman, mobile apps, curl)
+  if (!origin) {
+    return next()
+  }
+
+  // If origin is allowed, set headers
   if (allowedOrigins.includes(origin)) {
-    // echo back the exact origin (required when using credentials)
     res.setHeader('Access-Control-Allow-Origin', origin)
     res.setHeader('Access-Control-Allow-Credentials', 'true')
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept,X-Requested-With')
-    if (req.method === 'OPTIONS') return res.sendStatus(204)
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type,Authorization,Accept,X-Requested-With'
+    )
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204)
+    }
     return next()
   }
+
+  // Allow Postman or unknown tools safely (non-browser)
+  if (origin.startsWith('postman') || origin.startsWith('app://')) {
+    return next()
+  }
+
+  // Otherwise explicitly block browsers from unknown origins
   return res.status(403).json({ message: 'CORS Error: Origin not allowed' })
 })
+
+
 
 
 app.use(express.json())
@@ -55,6 +78,8 @@ app.use('/api/rista', ristaHealthRoutes)
 app.use('/api/analytics', analyticsRoutes)
 app.use("/api/brand", brandSettingsRoutes);
 app.use("/api/brand", brandProfileRoutes);
+app.use('/api/meeting', meetingRoutes)
+
 app.get("/debug/db", async (req, res) => {
   const dbName = mongoose.connection.db.databaseName;
   const collections = await mongoose.connection.db

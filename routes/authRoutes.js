@@ -29,6 +29,7 @@ const sanitizeUser = (user) => ({
   address: user.address,
 })
 
+
 router.post('/signup', signup )
 
 router.post('/login', async (req, res) => {

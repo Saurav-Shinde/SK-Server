@@ -26,8 +26,13 @@ const userSchema = new mongoose.Schema(
     city: { type: String, required: true },
     state: { type: String, required: true },
     pincode: { type: String, required: true }
-  }
+  },
 
+  credits: {
+    type: Number,
+    default: 100, // signup bonus
+  }
+  
   },
   { timestamps: true }
 )
