@@ -2,10 +2,8 @@ import express from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import User from '../models/user.js'
-
 import { signup } from '../controllers/auth.controller.js'
 import { authMiddleware } from "../middleware/auth.js";
-import { getUserCredits } from "../controllers/user.controller.js";
 
 const router = express.Router()
 
@@ -22,6 +20,8 @@ const createToken = (user) => {
   )
 }
 
+
+
 const sanitizeUser = (user) => ({
   id: user._id,
   name: user.name,
@@ -30,11 +30,8 @@ const sanitizeUser = (user) => ({
   address: user.address,
 })
 
-router.post('/signup', signup)
 
-// ✅ Correct route to fetch credits
-router.get("/credits", authMiddleware, getUserCredits)
-
+router.post('/signup', signup )
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body
@@ -62,3 +59,4 @@ router.post('/login', async (req, res) => {
 })
 
 export default router
+
