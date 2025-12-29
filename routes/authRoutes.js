@@ -2,7 +2,8 @@ import express from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import User from '../models/user.js'
-import { signup } from '../controllers/auth.controller.js'
+import { signup, getCredits } from '../controllers/auth.controller.js'
+import { authMiddleware } from "../middleware/auth.js";
 
 const router = express.Router()
 
@@ -31,7 +32,7 @@ const sanitizeUser = (user) => ({
 
 
 router.post('/signup', signup )
-
+router.get("/credits", authMiddleware, getCredits);
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body
