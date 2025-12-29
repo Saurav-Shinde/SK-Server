@@ -24,39 +24,41 @@ const rawOrigins = process.env.CLIENT_ORIGIN || 'http://localhost:3000'
 const allowedOrigins = rawOrigins.split(',').map(s => s.trim()).filter(Boolean)
 
 app.use((req, res, next) => {
-  const origin = req.get('Origin')
+  const origin = req.get('Origin');
 
-  // 👇 PRINT ORIGIN FOR DEBUGGING
-  console.log('Incoming Origin =>', origin || '(no origin header)')
+  console.log('Incoming Origin =>', origin || '(no origin header)');
 
-  // Allow requests without Origin (Postman, mobile apps, curl)
-  if (!origin) {
-    return next()
-  }
+  // allow no-origin requests (curl, Postman, server-to-server)
+  if (!origin) return next();
 
-  // If origin is allowed, set headers
+  // allow defined origins
   if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin)
-    res.setHeader('Access-Control-Allow-Credentials', 'true')
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader(
+      'Access-Control-Allow-Methods',
+      'GET,POST,PUT,PATCH,DELETE,OPTIONS'
+    );
     res.setHeader(
       'Access-Control-Allow-Headers',
       'Content-Type,Authorization,Accept,X-Requested-With'
-    )
+    );
+
     if (req.method === 'OPTIONS') {
-      return res.sendStatus(204)
+      return res.sendStatus(204);
     }
-    return next()
+
+    return next();
   }
 
-  // Allow Postman or unknown tools safely (non-browser)
-  if (origin.startsWith('postman') || origin.startsWith('app://')) {
-    return next()
+  // safely guard this (avoid .startsWith on undefined)
+  if (origin && (origin.startsWith('postman') || origin.startsWith('app://'))) {
+    return next();
   }
 
-  // Otherwise explicitly block browsers from unknown origins
-  return res.status(403).json({ message: 'CORS Error: Origin not allowed' })
-})
+  return res.status(403).json({ message: 'CORS Error: Origin not allowed' });
+});
+
 
 
 
