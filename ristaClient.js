@@ -77,20 +77,46 @@ export const ristaClient = {
   },
 
   // ✅ Inventory
-  async getInventory(store) {
-    try {
+async getInventory(branchCode) {
+  let all = [];
+  let lastKey = null;
+
+  try {
+    while (true) {
       const res = await ristaApi.get("/inventory/store/items", {
-        params: { store },
+        params: lastKey
+          ? { branchCode, lastKey }
+          : { branchCode }
       });
-      return res.data || [];
-    } catch (err) {
-      return handleNotFound(err, []);
+
+      const body = res.data || {};
+
+      const pageItems = body.data || [];
+      all = all.concat(pageItems);
+
+      if (!body.lastKey) break;
+      lastKey = body.lastKey;
     }
-  },
+
+    return all;
+  } catch (err) {
+    return handleNotFound(err, []);
+  }
+},
+
+
 
   // ✅ Branch list
   async getOutlets() {
     const res = await ristaApi.get("/branch/list");
     return res.data || [];
   },
+  // ✅ Store list (contains storeCode, storeName etc.)
+// ✅ Store list (contains storeCode)
+  async getStores() {
+    const res = await ristaApi.get("/inventory/store/list");
+    return res.data || [];
+  }
+
+
 };
