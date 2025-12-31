@@ -63,18 +63,45 @@ export const ristaClient = {
   },
 
   // ✅ Sales page (for KPT)
-  async getSalesPage({ branch, period, page = 1, size = 200 }) {
-    try {
+  // 🔁 Fetch ALL sales for given branch + day using /sales/page
+// 🔁 Fetch ALL sales for given branch + day using /sales/page
+async getSalesPage({ branch, day, status = "Closed" }) {
+  let all = [];
+  let lastKey = null;
+
+  try {
+    while (true) {
       const res = await ristaApi.get("/sales/page", {
-        params: { branch, period, page, size },
+        params: lastKey
+          ? { branch, day, status, lastKey }
+          : { branch, day, status }
       });
 
-      // Rista returns paginated object
-      return res.data?.data || [];
-    } catch (err) {
-      return handleNotFound(err, []);
+      const body = res.data || {};
+      const page = body.data || [];
+
+      // append page
+      all = all.concat(page);
+
+      // 🔍 DEBUG LOG (safe, small)
+      page.slice(0, 3).forEach((sale) => {
+        
+      });
+
+      if (!body.lastKey) break;
+      lastKey = body.lastKey;
     }
-  },
+
+    console.log("FINAL TOTAL SALES:", all.length);
+
+    return all;
+  } catch (err) {
+    console.error("Error in getSalesPage()", err?.response?.data || err);
+    return handleNotFound(err, []);
+  }
+},
+
+
 
   // ✅ Inventory
 async getInventory(branchCode) {
