@@ -20,44 +20,40 @@ connectDB()
 
 const app = express()
 
-const rawOrigins = process.env.CLIENT_ORIGIN || 'http://localhost:3000'
-const allowedOrigins = rawOrigins.split(',').map(s => s.trim()).filter(Boolean)
+const rawOrigins =
+  process.env.CLIENT_ORIGIN ||
+  "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173";
+
+const allowedOrigins = rawOrigins
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 app.use((req, res, next) => {
-  const origin = req.get('Origin');
+  const origin = req.headers.origin;
 
-  console.log('Incoming Origin =>', origin || '(no origin header)');
-
-  // allow no-origin requests (curl, Postman, server-to-server)
-  if (!origin) return next();
-
-  // allow defined origins
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader(
-      'Access-Control-Allow-Methods',
-      'GET,POST,PUT,PATCH,DELETE,OPTIONS'
-    );
-    res.setHeader(
-      'Access-Control-Allow-Headers',
-      'Content-Type,Authorization,Accept,X-Requested-With'
-    );
-
-    if (req.method === 'OPTIONS') {
-      return res.sendStatus(204);
-    }
-
-    return next();
+  // Development: allow localhost always
+  if (origin && (origin.includes("localhost") || origin.includes("127.0.0.1"))) {
+    res.header("Access-Control-Allow-Origin", origin);
   }
 
-  // safely guard this (avoid .startsWith on undefined)
-  if (origin && (origin.startsWith('postman') || origin.startsWith('app://'))) {
-    return next();
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+  );
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Content-Type,Authorization,Accept,X-Requested-With"
+  );
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
   }
 
-  return res.status(403).json({ message: 'CORS Error: Origin not allowed' });
+  return next();
 });
+
 
 
 

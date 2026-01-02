@@ -11,7 +11,7 @@ const ProductSchema = new mongoose.Schema(
     image_url: String
   },
   {
-    strict: false,          // 🔥 CRITICAL
+    strict: false,         
     timestamps: true,
     collection: "products"
   }
