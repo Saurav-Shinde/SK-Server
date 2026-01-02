@@ -29,30 +29,21 @@ const allowedOrigins = rawOrigins
   .map((s) => s.trim())
   .filter(Boolean);
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
+app.use(
+  cors({
+    origin: [
+      "https://sk-peach-two.vercel.app",
+      "http://localhost:3000",
+    ],
+    credentials: true,
+    methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+    allowedHeaders: "Content-Type,Authorization,Accept,X-Requested-With"
+  })
+);
 
-  // Development: allow localhost always
-  if (origin && (origin.includes("localhost") || origin.includes("127.0.0.1"))) {
-    res.header("Access-Control-Allow-Origin", origin);
-  }
+// explicitly handle preflight
+app.options("*", cors());
 
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-  );
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Content-Type,Authorization,Accept,X-Requested-With"
-  );
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-
-  return next();
-});
 
 
 
