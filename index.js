@@ -22,7 +22,7 @@ const app = express()
 
 const rawOrigins =
   process.env.CLIENT_ORIGIN ||
-  "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173";
+  "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,https://sk-peach-two.vercel.app";
 
 const allowedOrigins = rawOrigins
   .split(",")
