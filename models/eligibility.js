@@ -11,11 +11,10 @@ const eligibilitySchema = new mongoose.Schema(
     locationMapping: { type: String, required: true },
     brandStrength: { type: String, required: true },
     socialMediaEngagement: { type: String, required: true },
-    ristaOutletId: { type: String, default: null }, // optional manual link
+    ristaOutletId: { type: String, default: null },
 
     swiggyRating: { type: Number, default: null },
     zomatoRating: { type: Number, default: null },
-    // optional legacy combined field
     dspRatings: { type: String, default: null },
 
     // Operating
@@ -23,8 +22,8 @@ const eligibilitySchema = new mongoose.Schema(
     deliveryAOV: { type: Number, required: true },
     cogsAnalysis: { type: String, required: true },
 
-    dspRateType: { type: String, required: true },      // exclusive / nonExclusive / mixed
-    dspRatePercent: { type: String, default: null },    // only required for some types (handled in route/frontend)
+    dspRateType: { type: String, required: true },
+    dspRatePercent: { type: String, default: null },
 
     wastageRisk: { type: String, required: true },
 
@@ -33,11 +32,10 @@ const eligibilitySchema = new mongoose.Schema(
 
     menuSupplyChainComplexity: { type: [String], required: true },
 
-    launchCapex: { type: String, required: true },      // yes / no
-    launchCapexPieces: { type: String, default: null }, // only when launchCapex === 'yes'
+    launchCapex: { type: String, required: true },
+    launchCapexPieces: { type: String, default: null },
 
-    // Smallwares
-    smallwaresNeeded: { type: String, default: null },  // legacy, optional
+    smallwaresNeeded: { type: String, default: null },
     smallwaresCost: { type: String, required: true },
 
     // Expansion
@@ -56,16 +54,25 @@ const eligibilitySchema = new mongoose.Schema(
     equipmentAvailability: { type: String, required: true },
     howDidYouHear: { type: String, required: true },
 
-    // Scoring and AI Analysis
+    // ✅ NEW — Cloudinary Excel uploads
+    attachments: [
+      {
+        type: String, // secure_url
+      },
+    ],
+
+    // Scoring + AI
     totalScore: { type: Number },
     meetsThreshold: { type: Boolean },
     decision: { type: String },
+
     sectionScores: {
       mapping: { raw: Number, normalized: Number },
       operating: { raw: Number, normalized: Number },
       expansion: { raw: Number, normalized: Number },
       special_conditions: { raw: Number, normalized: Number },
     },
+
     aiAnalysisSummary: { type: String },
   },
   { timestamps: true }

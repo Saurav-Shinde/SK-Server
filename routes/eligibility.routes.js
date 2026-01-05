@@ -1,8 +1,15 @@
-import express from 'express'
-import { submitEligibility } from '../controllers/eligibility.controller.js'
+import express from "express";
+import { submitEligibility } from "../controllers/eligibility.controller.js";
+import multer from "multer";
 
-const router = express.Router()
+const router = express.Router();
 
-router.post('/', submitEligibility)
+const upload = multer({ storage: multer.memoryStorage() });
 
-export default router
+router.post(
+  "/",
+  upload.array("attachments"),
+  submitEligibility
+);
+
+export default router;
