@@ -24,12 +24,6 @@ export const getStockItems = async (req, res) => {
       branchLabel
     );
 
-    console.log({
-      brandName,
-      branchLabel,
-      storeCode,
-      storeCount: stores?.length,
-    });
 
     if (!storeCode) {
       return res.status(404).json({
@@ -41,11 +35,6 @@ export const getStockItems = async (req, res) => {
 
     // 3️⃣ fetch inventory ONLY for that store
     const inventory = await ristaClient.getInventory(storeCode);
-    console.log("First inventory row:", inventory[0]);
-    console.log("Raw inventory response:", inventory);
-console.log("Type:", typeof inventory, "IsArray:", Array.isArray(inventory));
-console.log("Length:", inventory?.length);
-console.log("First item:", inventory?.[0]);
 
     return res.json({
       success: true,
