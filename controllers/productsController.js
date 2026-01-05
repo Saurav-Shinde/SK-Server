@@ -18,6 +18,8 @@ export const getProducts = async (req, res) => {
             name: "$Supplier Item Name",
             unit: "$Supplier Unit",
             unitCost: "$Supplier Unit Cost",
+            category: "$Category",
+            image: "$image_url",
             supplier: "$Supplier Name"
           },
           totalQty: { $sum: "$Supplier Qty" }
@@ -28,11 +30,14 @@ export const getProducts = async (req, res) => {
           _id: 0,
           supplierName: "$_id.supplier",
           itemName: "$_id.name",
+          category: "$_id.category",
+          image_url: "$_id.image",
           unit: "$_id.unit",
           unitCost: "$_id.unitCost",
           totalQty: 1
         }
       }
+
     ]);
 
     res.status(200).json(products);
