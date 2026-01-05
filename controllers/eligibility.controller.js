@@ -116,6 +116,13 @@ export const submitEligibility = async (req, res) => {
 
     // ---------- SAVE ----------
     const submission = await EligibilitySubmission.create(payload);
+    await sendEligibilityEmails({
+      submission,
+      scoreResult,
+      aiAnalysisSummary: payload.aiAnalysisSummary,
+      attachments: attachmentLinks,
+    })
+
 
     return res.status(201).json({
       message: "Submitted",
