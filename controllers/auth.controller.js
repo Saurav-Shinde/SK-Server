@@ -42,17 +42,29 @@ export const signup = async (req, res) => {
     // hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+
     // CLIENT SIGNUP
     if (userType === "client") {
       const exists = await User.findOne({ email: normalizedEmail });
       if (exists) return res.status(409).json({ message: "Email already exists" });
+
+      // check brand users
+      const sameBrandUser = await User.findOne({ brandName });
+
+      // decide credits
+      let signupCredits = 0;
+
+      if (!sameBrandUser) {
+        signupCredits = 3000;
+      }
 
       const user = await User.create({
         name,
         brandName,
         email: normalizedEmail,
         password: hashedPassword,
-        address
+        address,
+        credits: signupCredits
       });
 
       const token = jwt.sign(
@@ -62,11 +74,15 @@ export const signup = async (req, res) => {
       );
 
       return res.status(201).json({
-        message: "Client account created",
+        message: sameBrandUser
+          ? "Account created. Brand already exists — no credits issued."
+          : "Account created with welcome credits.",
         role: "client",
+        credits: user.credits,
         token
       });
     }
+
 
     // VENDOR SIGNUP
     if (userType === "vendor") {
