@@ -11,16 +11,16 @@ export const scheduleMeeting = async (req, res) => {
       return res.status(400).json({ message: 'Meeting date is required.' })
     }
 
-    // 1) Deduct credits atomically (only if ≥ 20)
+    // 1) Deduct credits atomically (only if ≥ 30)
     const updatedUser = await User.findOneAndUpdate(
-      { _id: userId, credits: { $gte: 20 } },
-      { $inc: { credits: -20 } },
+      { _id: userId, credits: { $gte: 30 } },
+      { $inc: { credits: -30 } },
       { new: true }
     )
 
     if (!updatedUser) {
       return res.status(400).json({
-        message: 'Insufficient credits. Need 20 credits to schedule a meeting.'
+        message: 'Insufficient credits. Need 30 credits to schedule a meeting.'
       })
     }
 
@@ -36,7 +36,7 @@ export const scheduleMeeting = async (req, res) => {
     // 3) Respond
     res.status(201).json({
       success: true,
-      message: 'Meeting scheduled successfully. 20 credits deducted.',
+      message: 'Meeting scheduled successfully. 30 credits deducted.',
       remainingCredits: updatedUser.credits,
       meeting
     })
