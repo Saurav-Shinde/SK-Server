@@ -1,20 +1,21 @@
-import express from 'express'
-import { authMiddleware } from '../middleware/auth.js'
-import Brand from '../models/brand.js'
-import { ristaClient } from '../ristaClient.js'
+import express from "express";
+import { authMiddleware } from "../middleware/auth.js";
+import Brand from "../models/brand.js";
+import User from "../models/user.js";
+import { ristaClient } from "../ristaClient.js";
 
-const router = express.Router()
+const router = express.Router();
 
-const normalize = (s = '') =>
-  s.toString()
-    .toLowerCase()
-    .trim()
-    .replace(/shawarma/g, '')
-    .replace(/[^a-z0-9]/g, '')
-    .replace(/\s+/g, '')
+const norm = (s = "") =>
+  s.toString().toLowerCase().replace(/shawarma/g, "").replace(/[^a-z0-9]/g, "");
 
-router.get('/sales/summary', authMiddleware, async (req, res) => {
+router.get("/sales/summary", authMiddleware, async (req, res) => {
   try {
+    // 🔐 Only clients can access analytics
+    if (req.user.role !== "client") {
+      return res.status(403).json({ message: "Analytics allowed only for clients" });
+    }
+
     const { day, branches: queryBranches } = req.query || {};
 
     if (!day || !/^\d{4}-\d{2}-\d{2}$/.test(day)) {
@@ -23,19 +24,22 @@ router.get('/sales/summary', authMiddleware, async (req, res) => {
       });
     }
 
-    const brandName = req.user?.brandName;
-    if (!brandName) {
-      return res.status(401).json({ message: "brandName missing in token" });
+    // Get brandName from logged-in client
+    const user = await User.findById(req.user.userId).select("brandName");
+    if (!user || !user.brandName) {
+      return res.status(404).json({ message: "Brand not linked to this account" });
     }
 
-    const norm = s => (s || "")
-      .toLowerCase()
-      .replace(/shawarma/g, "")
-      .replace(/[^a-z0-9]/g, "");
-
+    const brandName = user.brandName;
     const brandKey = norm(brandName);
 
-    // -------- Branch resolving ----------
+    // Load Brand document
+    const brandDoc = await Brand.findOne({ brandName });
+    if (!brandDoc) {
+      return res.json({ noData: true, reason: "brand_not_found" });
+    }
+
+    // Resolve branches
     let branches = [];
 
     if (queryBranches) {
@@ -43,12 +47,6 @@ router.get('/sales/summary', authMiddleware, async (req, res) => {
         ? queryBranches
         : [queryBranches];
     } else {
-      const brandDoc = await Brand.findOne({ brandName });
-
-      if (!brandDoc) {
-        return res.json({ noData: true, reason: "brand_not_found" });
-      }
-
       branches =
         brandDoc.ristaBranchCodes?.length
           ? brandDoc.ristaBranchCodes
@@ -57,20 +55,19 @@ router.get('/sales/summary', authMiddleware, async (req, res) => {
 
     branches = [...new Set(branches.filter(Boolean))];
 
-    // -------- Fetch all sales pages ----------
+    // Fetch Rista sales
     const allSalesPages = await Promise.all(
-      branches.map(branch =>
+      branches.map((branch) =>
         ristaClient.getSalesPage({ branch, day, status: "Closed" })
       )
     );
 
     const allSales = allSalesPages.flat();
-
     if (!allSales.length) {
       return res.json({ noData: true, reason: "no_sales" });
     }
 
-    // -------- Brand item filter ----------
+    // Brand filtering
     let brandItems = [];
     let brandOrderSet = new Set();
 
@@ -80,21 +77,16 @@ router.get('/sales/summary', authMiddleware, async (req, res) => {
     let totalDiscount = 0;
 
     for (const sale of allSales) {
-      const { invoiceNumber, billRoundedAmount, netAmount, taxAmount, totalDiscountAmount } =
-        sale;
+      const { invoiceNumber, billRoundedAmount, netAmount, taxAmount, totalDiscountAmount } = sale;
 
-      // filter items of this brand
-      const matchedItems = (sale.items || []).filter(it =>
+      const matchedItems = (sale.items || []).filter((it) =>
         norm(it.brandName || it.accountName || "").includes(brandKey)
       );
 
       if (!matchedItems.length) continue;
 
       brandOrderSet.add(invoiceNumber);
-
-      for (const it of matchedItems) {
-        brandItems.push(it);
-      }
+      brandItems.push(...matchedItems);
 
       totalRevenue += Number(billRoundedAmount || 0);
       totalNet += Number(netAmount || 0);
@@ -103,24 +95,13 @@ router.get('/sales/summary', authMiddleware, async (req, res) => {
     }
 
     if (!brandItems.length) {
-      return res.json({
-        noData: true,
-        reason: "brand_items_not_found",
-      });
+      return res.json({ noData: true, reason: "brand_items_not_found" });
     }
 
-    // -------- KPI Computations ----------
+    // KPIs
     const totalOrders = brandOrderSet.size;
-
-    const totalItemQty = brandItems.reduce(
-      (s, i) => s + Number(i.quantity || 0),
-      0
-    );
-
-    const totalItemNet = brandItems.reduce(
-      (s, i) => s + Number(i.netAmount || 0),
-      0
-    );
+    const totalItemQty = brandItems.reduce((s, i) => s + Number(i.quantity || 0), 0);
+    const totalItemNet = brandItems.reduce((s, i) => s + Number(i.netAmount || 0), 0);
 
     const avgSaleAmount = totalOrders
       ? Number((totalRevenue / totalOrders).toFixed(2))
@@ -141,16 +122,16 @@ router.get('/sales/summary', authMiddleware, async (req, res) => {
       totalItemQty,
       avgItemSellingPrice: totalItemQty
         ? Number((totalItemNet / totalItemQty).toFixed(2))
-        : 0,
+        : 0
     });
+
   } catch (err) {
-    console.error(err);
+    console.error("[SALES SUMMARY]", err);
     return res.status(500).json({
-      message: "Failed using /sales/page",
-      details: err?.message,
+      message: "Failed to load sales summary",
+      details: err?.message
     });
   }
 });
 
-
-export default router
+export default router;

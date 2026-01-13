@@ -15,6 +15,11 @@ import brandSettingsRoutes from "./routes/brand.settings.routes.js";
 import brandProfileRoutes from "./routes/brand.profile.routes.js";
 import meetingRoutes from './routes/meeting.routes.js'
 import stockRoutes from "./routes/stock.routes.js";
+import walletRoutes from "./routes/wallet.routes.js";
+import creditsRoutes from "./routes/credits.routes.js";
+
+
+
 dotenv.config()
 connectDB()
 
@@ -69,6 +74,8 @@ app.use("/api/brand", brandSettingsRoutes);
 app.use("/api/brand", brandProfileRoutes);
 app.use('/api/meeting', meetingRoutes)
 app.use("/api", stockRoutes);
+app.use("/api/wallet", walletRoutes);
+app.use("/api/credits", creditsRoutes);
 
 app.get("/debug/db", async (req, res) => {
   const dbName = mongoose.connection.db.databaseName;

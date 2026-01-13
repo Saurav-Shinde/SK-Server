@@ -1,29 +1,24 @@
-import User from '../models/user.js'
-import bcrypt from 'bcryptjs'
-import jwt from 'jsonwebtoken'
-import Vendor from '../models/vendor.js'
+import User from "../models/user.js";
+import Vendor from "../models/vendor.js";
+import Consumer from "../models/consumer.js";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 
-const createToken = (user) => {
-  const secret = process.env.JWT_SECRET || 'development-secret'
-
-  return jwt.sign(
-    {
-      userId: user._id,
-      brandName: user.brandName,
-    },
-    secret,
-    { expiresIn: '7d' }
-  )
-}
+const createToken = (payload) => {
+  return jwt.sign(payload, process.env.JWT_SECRET || "development-secret", {
+    expiresIn: "7d"
+  });
+};
 
 const sanitizeUser = (user) => ({
   id: user._id,
   name: user.name,
   brandName: user.brandName,
   email: user.email,
-  address: user.address,
-})
+  address: user.address
+});
 
+/* ---------------- SIGNUP ---------------- */
 export const signup = async (req, res) => {
   try {
     const {
@@ -38,25 +33,15 @@ export const signup = async (req, res) => {
     } = req.body;
 
     const normalizedEmail = email.toLowerCase();
-
-    // hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-
-    // CLIENT SIGNUP
+    /* ---------- CLIENT ---------- */
     if (userType === "client") {
       const exists = await User.findOne({ email: normalizedEmail });
       if (exists) return res.status(409).json({ message: "Email already exists" });
 
-      // check brand users
       const sameBrandUser = await User.findOne({ brandName });
-
-      // decide credits
-      let signupCredits = 0;
-
-      if (!sameBrandUser) {
-        signupCredits = 3000;
-      }
+      const signupCredits = sameBrandUser ? 0 : 3000;
 
       const user = await User.create({
         name,
@@ -64,27 +49,22 @@ export const signup = async (req, res) => {
         email: normalizedEmail,
         password: hashedPassword,
         address,
-        credits: signupCredits
+        credits: signupCredits,
+        wallet: { balance: 0, transactions: [] }
       });
 
-      const token = jwt.sign(
-        { userId: user._id, role: "client" },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-      );
+
+      const token = createToken({ userId: user._id, role: "client" });
 
       return res.status(201).json({
-        message: sameBrandUser
-          ? "Account created. Brand already exists — no credits issued."
-          : "Account created with welcome credits.",
+        message: "Client account created",
         role: "client",
         credits: user.credits,
         token
       });
     }
 
-
-    // VENDOR SIGNUP
+    /* ---------- VENDOR ---------- */
     if (userType === "vendor") {
       const exists = await Vendor.findOne({ email: normalizedEmail });
       if (exists) return res.status(409).json({ message: "Vendor already exists" });
@@ -99,11 +79,7 @@ export const signup = async (req, res) => {
         pan
       });
 
-      const token = jwt.sign(
-        { vendorId: vendor._id, role: "vendor" },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-      );
+      const token = createToken({ vendorId: vendor._id, role: "vendor" });
 
       return res.status(201).json({
         message: "Vendor account created",
@@ -112,112 +88,101 @@ export const signup = async (req, res) => {
       });
     }
 
+    /* ---------- CONSUMER ---------- */
+    if (userType === "consumer") {
+      const exists = await Consumer.findOne({ email: normalizedEmail });
+      if (exists) return res.status(409).json({ message: "Email already exists" });
+
+      const consumer = await Consumer.create({
+        name,
+        email: normalizedEmail,
+        password: hashedPassword,
+        address
+      });
+
+      const token = createToken({ consumerId: consumer._id, role: "consumer" });
+
+      return res.status(201).json({
+        message: "Consumer account created",
+        role: "consumer",
+        token
+      });
+    }
+
     return res.status(400).json({ message: "Invalid user type" });
-
   } catch (err) {
-  console.error("Signup error details:", err);
-  return res.status(500).json({ message: err.message });
-}
-
+    console.error("Signup error:", err);
+    return res.status(500).json({ message: "Signup failed" });
+  }
 };
 
-
-export const getCredits = async (req, res) => {
-  try {
-    const userId = req.user?.userId // set by authMiddleware
-
-    if (!userId) {
-      return res.status(401).json({ message: 'Unauthorized' })
-    }
-
-    // Only fetch what we need
-    const user = await User.findById(userId).select('credits name email')
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' })
-    }
-
-    return res.json({
-      success: true,
-      credits: user.credits || 0,
-      name: user.name,
-      email: user.email,
-    })
-  } catch (err) {
-    console.error('Credits fetch error:', err)
-    return res
-      .status(500)
-      .json({ message: 'Unable to fetch credits, please try again later.' })
-  }
-}
+/* ---------------- LOGIN ---------------- */
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required." });
-    }
-
     const normalizedEmail = email.toLowerCase();
 
-    // 1️⃣ Try CLIENT user first
+    /* ---------- CLIENT ---------- */
     let user = await User.findOne({ email: normalizedEmail });
-
-    if (user) {
-      const match = await bcrypt.compare(password, user.password);
-      if (!match) {
-        return res.status(401).json({ message: "Invalid email or password." });
-      }
-
-      const token = createToken(user);
-
+    if (user && (await bcrypt.compare(password, user.password))) {
+      const token = createToken({ userId: user._id, role: "client" });
       return res.json({
-        message: "Client login successful",
         userType: "client",
         token,
         user: sanitizeUser(user)
       });
     }
 
-    // 2️⃣ Try VENDOR next
+    /* ---------- VENDOR ---------- */
     let vendor = await Vendor.findOne({ email: normalizedEmail });
-
-    if (!vendor) {
-      return res.status(404).json({ message: "Account not found." });
+    if (vendor && (await bcrypt.compare(password, vendor.password))) {
+      const token = createToken({ vendorId: vendor._id, role: "vendor" });
+      return res.json({
+        userType: "vendor",
+        token,
+        vendor
+      });
     }
 
-    const vendorMatch = await bcrypt.compare(password, vendor.password);
-    if (!vendorMatch) {
-      return res.status(401).json({ message: "Invalid email or password." });
+    /* ---------- CONSUMER ---------- */
+    let consumer = await Consumer.findOne({ email: normalizedEmail });
+    if (consumer && (await bcrypt.compare(password, consumer.password))) {
+      const token = createToken({ consumerId: consumer._id, role: "consumer" });
+      return res.json({
+        userType: "consumer",
+        token,
+        consumer: {
+          id: consumer._id,
+          name: consumer.name,
+          email: consumer.email,
+          address: consumer.address
+        }
+      });
     }
 
-    // vendor token
-    const token = jwt.sign(
-      {
-        vendorId: vendor._id,
-        storeName: vendor.storeName
-      },
-      process.env.JWT_SECRET || "development-secret",
-      { expiresIn: "7d" }
-    );
-
-    return res.json({
-      message: "Vendor login successful",
-      userType: "vendor",
-      token,
-      vendor: {
-        id: vendor._id,
-        supplierName: vendor.supplierName,
-        storeName: vendor.storeName,
-        email: vendor.email,
-        address: vendor.address,
-        fssai: vendor.fssai,
-        pan: vendor.pan
-      }
-    });
-
+    return res.status(401).json({ message: "Invalid email or password" });
   } catch (err) {
     console.error("Login error:", err);
-    res.status(500).json({ message: "Unable to login. Please try again." });
+    return res.status(500).json({ message: "Login failed" });
+  }
+};
+
+/* ---------------- CREDITS (CLIENT ONLY) ---------------- */
+export const getCredits = async (req, res) => {
+  try {
+    if (req.user.role !== "client") {
+      return res.status(403).json({ message: "Not allowed" });
+    }
+
+    const user = await User.findById(req.user.userId).select("credits name email");
+
+    return res.json({
+      success: true,
+      credits: user.credits || 0,
+      name: user.name,
+      email: user.email
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Unable to fetch credits" });
   }
 };
