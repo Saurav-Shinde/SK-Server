@@ -1,4 +1,4 @@
-import ItemMaster from "../models/ItemMaster.js";
+import ItemMaster from "../models/itemMaster.js";
 import SubRecipe from "../models/SubRecipe.js";
 import MainRecipe from "../models/MainRecipe.js";
 
