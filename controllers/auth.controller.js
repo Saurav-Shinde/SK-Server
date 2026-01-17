@@ -170,19 +170,26 @@ export const login = async (req, res) => {
 /* ---------------- CREDITS (CLIENT ONLY) ---------------- */
 export const getCredits = async (req, res) => {
   try {
-    if (req.user.role !== "client") {
-      return res.status(403).json({ message: "Not allowed" });
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const user = await User.findById(req.user.userId).select("credits name email");
+    const user = await User.findById(req.user.userId)
+      .select("credits name email");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
     return res.json({
       success: true,
-      credits: user.credits || 0,
+      credits: user.credits ?? 0,
       name: user.name,
       email: user.email
     });
   } catch (err) {
+    console.error("Get credits error:", err);
     return res.status(500).json({ message: "Unable to fetch credits" });
   }
 };
+

@@ -27,13 +27,6 @@ const userSchema = new mongoose.Schema(
       state: { type: String, required: true },
       pincode: { type: String, required: true }
     },
-
-    // 🧠 Free meeting credits
-    credits: {
-      type: Number,
-      default: 1000
-    },
-
     // 💳 Paid wallet
     wallet: {
       balance: { type: Number, default: 0 },

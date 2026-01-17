@@ -16,7 +16,7 @@ import brandProfileRoutes from "./routes/brand.profile.routes.js";
 import meetingRoutes from './routes/meeting.routes.js'
 import stockRoutes from "./routes/stock.routes.js";
 import walletRoutes from "./routes/wallet.routes.js";
-import creditsRoutes from "./routes/credits.routes.js";
+import costingRoutes from "./routes/costing.routes.js";
 
 
 
@@ -75,7 +75,8 @@ app.use("/api/brand", brandProfileRoutes);
 app.use('/api/meeting', meetingRoutes)
 app.use("/api", stockRoutes);
 app.use("/api/wallet", walletRoutes);
-app.use("/api/credits", creditsRoutes);
+app.use("/api/costing", costingRoutes);
+
 
 app.get("/debug/db", async (req, res) => {
   const dbName = mongoose.connection.db.databaseName;

@@ -3,6 +3,8 @@ import Razorpay from "razorpay";
 import crypto from "crypto";
 import User from "../models/user.js";
 import { authMiddleware } from "../middleware/auth.js";
+import { sendWalletTransactionEmail } from "../utils/walletMailer.js";
+
 
 const router = express.Router();
 
@@ -59,12 +61,19 @@ router.get("/", authMiddleware, async (req, res) => {
 /* ---------------- Verify payment & credit wallet ---------------- */
 router.post("/verify", authMiddleware, async (req, res) => {
   try {
+    console.log("Razorpay verify payload:", req.body);
+
     const {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
       amount
     } = req.body;
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      console.error("Missing Razorpay fields");
+      return res.status(400).json({ message: "Invalid Razorpay response" });
+    }
 
     const body = razorpay_order_id + "|" + razorpay_payment_id;
 
@@ -73,7 +82,11 @@ router.post("/verify", authMiddleware, async (req, res) => {
       .update(body)
       .digest("hex");
 
+    console.log("Expected:", expected);
+    console.log("Received:", razorpay_signature);
+
     if (expected !== razorpay_signature) {
+      console.error("Signature mismatch");
       return res.status(400).json({ message: "Payment verification failed" });
     }
 
@@ -83,9 +96,12 @@ router.post("/verify", authMiddleware, async (req, res) => {
       user.wallet = { balance: 0, transactions: [] };
     }
 
-    user.wallet.balance += Number(amount);
+    const amt = Number(amount);
+
+    user.wallet.balance += amt;
+
     user.wallet.transactions.push({
-      amount,
+      amount: amt,
       type: "credit",
       source: "razorpay",
       reason: "Wallet recharge"
@@ -93,11 +109,29 @@ router.post("/verify", authMiddleware, async (req, res) => {
 
     await user.save();
 
+    console.log("Wallet updated. Sending email…");
+
+    await sendWalletTransactionEmail({
+      to: user.email,
+      amount: amt,
+      type: "credit",
+      source: "razorpay",
+      reason: "Wallet recharge",
+      balance: user.wallet.balance,
+      brandName: user.brandName
+    });
+
+    console.log("Email sent.");
+
     res.json({ success: true, balance: user.wallet.balance });
+
   } catch (err) {
-    console.error("Wallet credit error:", err);
+    console.error("Wallet verify error:", err);
     res.status(500).json({ message: "Wallet update failed" });
   }
 });
+
+
+
 
 export default router;
