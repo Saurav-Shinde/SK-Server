@@ -1,6 +1,6 @@
 import ItemMaster from "../models/itemMaster.js";
-import SubRecipe from "../models/SubRecipe.js";
-import MainRecipe from "../models/MainRecipe.js";
+import SubRecipe from "../models/subRecipe.js";
+import MainRecipe from "../models/mainRecipe.js";
 
 const normalize = s => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
