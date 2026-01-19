@@ -4,6 +4,7 @@ import crypto from "crypto";
 import User from "../models/user.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { sendWalletTransactionEmail } from "../utils/walletMailer.js";
+import { requireAdmin } from "../middleware/requireAdmin.js";
 
 
 const router = express.Router();
@@ -135,6 +136,38 @@ router.post("/verify", authMiddleware, async (req, res) => {
   }
 });
 
+/*-----------------Admin Wallet Deduction-----------------*/
+router.post(
+  "/deduct",
+  authMiddleware,
+  requireAdmin,
+  async (req, res) => {
+    const { brandId, amount, reason } = req.body;
+
+    if (!reason) {
+      return res.status(400).json({ message: "Reason required" });
+    }
+
+    const brand = await Brand.findById(brandId);
+    if (!brand) return res.status(404).json({ message: "Brand not found" });
+
+    brand.wallet.balance -= amount;
+
+    brand.wallet.transactions.push({
+      type: "debit",
+      amount,
+      reason,
+      source: "admin"
+    });
+
+    await brand.save();
+
+    res.json({
+      message: "Wallet deducted successfully",
+      balance: brand.wallet.balance
+    });
+  }
+);
 
 
 

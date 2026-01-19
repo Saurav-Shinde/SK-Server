@@ -66,6 +66,7 @@ export const sendEligibilityEmails = async ({
   submission,
   scoreResult,
   aiAnalysisSummary,
+  attachments = []
 }) => {
   if (!submission) {
     console.warn('⚠️ submission missing in sendEligibilityEmails()')
@@ -88,10 +89,20 @@ export const sendEligibilityEmails = async ({
       ? 'Not provided'
       : String(v)
 
+  const attachmentsHtml =
+    attachments.length > 0
+      ? attachments
+          .map(
+            (url) =>
+              `<li><a href="${url}" target="_blank">${url}</a></li>`
+          )
+          .join('')
+      : '<li>No attachments provided</li>'
+
   const dynamicTemplateData = {
     submittedBy: submission.submittedByEmail,
     brandName: submission.brandName || 'Unknown Brand',
-    overallScore: total_score_0_to_10?.toFixed(2),
+    overallScore: total_score_0_to_10.toFixed(2),
     decision: decisionLabel,
     aiAnalysisSummary,
 
@@ -116,19 +127,17 @@ export const sendEligibilityEmails = async ({
     activationOpportunities: t(submission.activationOpportunities),
     domesticOpportunities: t(submission.domesticOpportunities),
     marketingCommitment: t(submission.dspMarketingCommitment),
-    attachmentsHtml: attachmentList,
+
+    attachmentsHtml
   }
 
-  // send to user
-  if (userEmail)
-    await sendViaSendGrid({
-      to: userEmail,
-      dynamicData: dynamicTemplateData,
-    })
+  if (userEmail) {
+    await sendViaSendGrid({ to: userEmail, dynamicData: dynamicTemplateData })
+  }
 
-  // send to team
   await sendViaSendGrid({
     to: internalEmail,
     dynamicData: dynamicTemplateData,
   })
 }
+

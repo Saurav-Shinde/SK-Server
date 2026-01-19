@@ -95,8 +95,15 @@ Write in second person (“Your brand…”, “We noticed…”).
 
     // ---- FIXED GEMINI REQUEST ----
     const result = await model.generateContent([
-      { role: 'user', parts: [{ text: prompt }] }
-    ])
+      {
+        parts: [
+          {
+            text: prompt
+          }
+        ]
+      }
+    ]);
+
 
     const text = result.response.text().trim()
 

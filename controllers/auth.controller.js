@@ -160,6 +160,25 @@ export const login = async (req, res) => {
       });
     }
 
+    /*-----------ADMIN-----------*/
+  // 🔒 ADMIN LOGIN (NO DB)
+  if (
+    email === process.env.ADMIN_USERNAME &&
+    password === process.env.ADMIN_PASSWORD
+  ) {
+    const token = jwt.sign(
+      { role: "admin" },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    return res.json({
+      userType: "admin",
+      token,
+      admin: { email }
+    });
+  }
+
     return res.status(401).json({ message: "Invalid email or password" });
   } catch (err) {
     console.error("Login error:", err);
