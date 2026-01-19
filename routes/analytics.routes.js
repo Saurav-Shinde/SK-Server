@@ -25,7 +25,7 @@ router.get("/sales/summary", authMiddleware, async (req, res) => {
     }
 
     // Get brandName from logged-in client
-    const user = await User.findById(req.user.userId).select("brandName");
+    const user = await User.findById(req.user._id).select("brandName");
     if (!user || !user.brandName) {
       return res.status(404).json({ message: "Brand not linked to this account" });
     }

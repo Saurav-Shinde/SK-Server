@@ -5,7 +5,7 @@ const MEETING_COST = 30
 
 export const scheduleMeeting = async (req, res) => {
   try {
-    const userId = req.user.userId
+    const userId = req.user._id
     const { name, email, date, notes } = req.body
 
     if (!date) {

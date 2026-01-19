@@ -13,16 +13,28 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET
 });
 
-/* ---------------- Get wallet ---------------- */
 router.get("/", authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId).select("wallet");
-    res.json(user.wallet || { balance: 0, transactions: [] });
+    const user = await User.findById(req.user._id).select("wallet");
+
+    if (!user || !user.wallet) {
+      return res.json({
+        balance: 0,
+        transactions: []
+      });
+    }
+
+    res.json({
+      balance: user.wallet.balance,
+      transactions: user.wallet.transactions
+    });
   } catch (err) {
     console.error("Wallet fetch error:", err);
     res.status(500).json({ message: "Wallet fetch failed" });
   }
 });
+
+
 
 /* ---------------- Create Razorpay order ---------------- */
 router.post("/create-order", authMiddleware, async (req, res) => {
@@ -47,22 +59,11 @@ router.post("/create-order", authMiddleware, async (req, res) => {
   }
 });
 
-/* ---------------- Transactions ---------------- */
-router.get("/", authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.userId).select("wallet");
 
-    res.json(user.wallet);
-  } catch (err) {
-    res.status(500).json({ message: "Unable to fetch wallet" });
-  }
-});
 
 /* ---------------- Verify payment & credit wallet ---------------- */
 router.post("/verify", authMiddleware, async (req, res) => {
   try {
-    console.log("Razorpay verify payload:", req.body);
-
     const {
       razorpay_order_id,
       razorpay_payment_id,
@@ -82,15 +83,18 @@ router.post("/verify", authMiddleware, async (req, res) => {
       .update(body)
       .digest("hex");
 
-    console.log("Expected:", expected);
-    console.log("Received:", razorpay_signature);
 
     if (expected !== razorpay_signature) {
       console.error("Signature mismatch");
       return res.status(400).json({ message: "Payment verification failed" });
     }
 
-    const user = await User.findById(req.user.userId);
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
 
     if (!user.wallet) {
       user.wallet = { balance: 0, transactions: [] };
