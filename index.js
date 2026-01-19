@@ -18,7 +18,7 @@ import stockRoutes from "./routes/stock.routes.js";
 import walletRoutes from "./routes/wallet.routes.js";
 import costingRoutes from "./routes/costing.routes.js";
 import vendorEligibilityRoutes from"./routes/vendorEligibility.routes.js"
-
+import servicesRoutes from "./routes/services.routes.js"
 
 dotenv.config()
 connectDB()
@@ -77,6 +77,7 @@ app.use("/api", stockRoutes);
 app.use("/api/wallet", walletRoutes);
 app.use("/api/costing", costingRoutes);
 app.use("/api/vendor-eligibility", vendorEligibilityRoutes);
+app.use("/api/services", servicesRoutes);
 
 app.get("/debug/db", async (req, res) => {
   const dbName = mongoose.connection.db.databaseName;

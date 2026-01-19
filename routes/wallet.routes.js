@@ -138,37 +138,42 @@ router.post("/verify", authMiddleware, async (req, res) => {
 
 /*-----------------Admin Wallet Deduction-----------------*/
 router.post(
-  "/deduct",
+  "/admin/deduct",
   authMiddleware,
   requireAdmin,
   async (req, res) => {
-    const { brandId, amount, reason } = req.body;
+    const { userId, amount, reason } = req.body;
 
-    if (!reason) {
-      return res.status(400).json({ message: "Reason required" });
+    if (!amount || !reason) {
+      return res.status(400).json({ message: "Amount and reason required" });
     }
 
-    const brand = await Brand.findById(brandId);
-    if (!brand) return res.status(404).json({ message: "Brand not found" });
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Brand not found" });
+    }
 
-    brand.wallet.balance -= amount;
+    if (!user.wallet) {
+      user.wallet = { balance: 0, transactions: [] };
+    }
 
-    brand.wallet.transactions.push({
+    user.wallet.balance -= Number(amount);
+
+    user.wallet.transactions.push({
       type: "debit",
-      amount,
+      amount: Number(amount),
       reason,
       source: "admin"
     });
 
-    await brand.save();
+    await user.save();
 
     res.json({
-      message: "Wallet deducted successfully",
-      balance: brand.wallet.balance
+      message: "Wallet deducted",
+      balance: user.wallet.balance
     });
   }
 );
-
 
 
 export default router;

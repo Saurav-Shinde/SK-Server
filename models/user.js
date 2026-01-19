@@ -33,12 +33,23 @@ const userSchema = new mongoose.Schema(
       transactions: [
         {
           amount: Number,
-          type: { type: String, enum: ["credit", "debit"] },
-          source: { type: String, enum: ["razorpay", "system"] },
+          type: { type: String, enum: ["credit", "debit"], required: true },
+
+          source: {
+            type: String,
+            enum: ["razorpay", "system", "admin"], // ✅ ADD admin
+            required: true
+          },
+
           reason: String,
-          date: { type: Date, default: Date.now }
+
+          createdAt: {
+            type: Date,
+            default: Date.now
+          }
         }
       ]
+
     }
   },
   { timestamps: true }
