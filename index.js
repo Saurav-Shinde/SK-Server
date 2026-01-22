@@ -75,7 +75,7 @@ app.use("/api/brand", brandProfileRoutes);
 app.use('/api/meeting', meetingRoutes)
 app.use("/api", stockRoutes);
 app.use("/api/wallet", walletRoutes);
-app.use("/api/costing", costingRoutes);
+app.use("/api", costingRoutes);
 app.use("/api/vendor-eligibility", vendorEligibilityRoutes);
 app.use("/api/services", servicesRoutes);
 

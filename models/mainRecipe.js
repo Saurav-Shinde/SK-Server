@@ -1,32 +1,64 @@
+// models/MainRecipe.js
 import mongoose from "mongoose";
 
-const MainRecipeSchema = new mongoose.Schema(
+const mainRecipeSchema = new mongoose.Schema(
   {
-    brandName: { type: String, required: true },
+    brand: {
+      type: String,
+      default: "DEFAULT",
+    },
 
-    name: { type: String, required: true },
-    normalizedName: { type: String, index: true },
+    bomName: {
+      type: String,
+      index: true,
+    },
 
-    // Excel: number of portions this BOM makes
-    servings: { type: Number, required: true },
+    category: {
+      type: String,
+      enum: ["F", "P"],
+      default: "F", // Food by default
+    },
 
-    // ✅ Excel columns
-    sellingPrice: { type: Number, required: true },      // "Current Price"
-    packagingCharge: { type: Number, default: 0 },       // "Packaging Cost Pushed to Customer"
-    packagingPushed: { type: Number, default: 0 },
-    items: [
-      {
-        category: { type: String, enum: ["Food", "Packaging"], required: true },
-        type: { type: String, enum: ["Ingredient", "SubRecipe"], required: true },
-        name: { type: String, required: true },
-        uom: { type: String },
-        qty: { type: Number, required: true }
-      }
-    ]
+    type: {
+      type: String,
+      enum: ["Ingredient", "SubRecipe"],
+    },
+
+    itemDescription: {
+      type: String,
+    },
+
+    uom: {
+      type: String,
+      enum: ["GM", "KG", "PC", "NOS", "PCS", "Pcs"],
+      default: "PC",
+    },
+
+    quantity: {
+      type: Number,
+      default: 0,
+    },
+
+    // OPTIONAL: price per unit (future use)
+    pricePerUnit: {
+      type: Number,
+      default: null,
+    },
+
+    // 🔥 AUTHORITATIVE COST FIELD
+    quantityPrice: {
+      type: Number,
+      default: 0,
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    strict: false, // 🔥 VERY IMPORTANT (allows legacy fields)
+  }
 );
 
-
-export default mongoose.models.MainRecipe ||
-  mongoose.model("MainRecipe", MainRecipeSchema, "mainrecipes_raw");
+export default mongoose.model(
+  "MainRecipe",
+  mainRecipeSchema,
+  "mainrecipe"
+);

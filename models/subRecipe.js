@@ -1,30 +1,29 @@
+// models/SubRecipe.js
 import mongoose from "mongoose";
 
-const SubRecipeSchema = new mongoose.Schema(
-  {
-    brandName: { type: String, required: true },
+const subRecipeSchema = new mongoose.Schema({
+  brand: { type: String, required: true },
 
-    // Excel BOM NAME
-    name: { type: String, required: true },
+  bomName: { type: String, required: true }, 
+  // e.g. "SR: FRIED ONION"
 
-    // Used for safe lookups
-    normalizedName: { type: String, index: true },
-
-    // Excel Yield column
-    yieldQty: { type: Number, required: true },
-    batchCost: Number,      // Excel Total Cost (Batch)
-    costPerUnit: Number,    // Excel Cost Per Unit
-    // Ingredients + nested sub-recipes
-    items: [
-      {
-        type: { type: String, enum: ["Ingredient", "SubRecipe"], required: true },
-        name: { type: String, required: true },
-        uom: { type: String, default: "GM" },
-        qty: { type: Number, required: true }
-      }
-    ]
+  type: {
+    type: String,
+    enum: ["Ingredient", "SubRecipe"],
+    required: true,
   },
-  { timestamps: true }
-);
 
-export default mongoose.model("SubRecipe", SubRecipeSchema, "subrecipes_raw");
+  itemDescription: { type: String, required: true },
+
+  uom: { type: String, enum: ["GM", "KG", "PC"], required: true },
+
+  quantity: { type: Number, required: true },
+
+  pricePerUnit: { type: Number, required: true },
+
+  quantityPrice: { type: Number, required: true },
+
+  yield: { type: Number, required: true },
+}, { timestamps: true });
+
+export default mongoose.model("SubRecipe", subRecipeSchema,"subrecipe");

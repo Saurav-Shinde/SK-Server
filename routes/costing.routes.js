@@ -1,10 +1,8 @@
-// routes/costing.js
 import express from "express";
-import { authMiddleware } from "../middleware/auth.js";
-import { getDishCost } from "../controllers/costing.controller.js";
+import getFoodCost from "../controllers/costing.controller.js";
 
 const router = express.Router();
 
-router.get("/:dish", authMiddleware, getDishCost);
+router.get("/food-cost/:dishName", getFoodCost);
 
 export default router;
