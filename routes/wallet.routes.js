@@ -5,7 +5,7 @@ import User from "../models/user.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { sendWalletTransactionEmail } from "../utils/walletMailer.js";
 import { requireAdmin } from "../middleware/requireAdmin.js";
-
+import Order from "../models/order.js";
 
 const router = express.Router();
 
@@ -174,6 +174,64 @@ router.post(
     });
   }
 );
+
+router.post("/pay", authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { amount, items } = req.body;
+
+    const payAmount = Number(amount);
+
+    if (!payAmount || payAmount <= 0) {
+      return res.status(400).json({ message: "Invalid amount" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (!user.wallet) {
+      user.wallet = { balance: 0, transactions: [] };
+    }
+
+    if (user.wallet.balance < payAmount) {
+      return res.status(400).json({ message: "Insufficient wallet balance" });
+    }
+
+    /* ================= WALLET DEDUCTION ================= */
+    user.wallet.balance -= payAmount;
+
+    user.wallet.transactions.push({
+      type: "debit",
+      amount: payAmount,
+      source: "admin", // MUST match enum
+      reason: "ORDER_PAYMENT"
+    });
+
+    await user.save();
+
+    /* ================= CREATE ORDER ================= */
+    const order = await Order.create({
+      brand: user._id,
+      items,
+      amount: payAmount,
+      paymentMethod: "wallet",
+      status: "PLACED"
+    });
+
+    res.json({
+      success: true,
+      orderId: order._id,
+      remainingBalance: user.wallet.balance
+    });
+
+  } catch (err) {
+    console.error("❌ Wallet pay error:", err);
+    res.status(500).json({ message: "Wallet payment failed" });
+  }
+});
+
 
 
 export default router;

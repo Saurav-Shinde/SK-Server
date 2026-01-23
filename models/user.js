@@ -37,7 +37,7 @@ const userSchema = new mongoose.Schema(
 
           source: {
             type: String,
-            enum: ["razorpay", "system", "admin"], // ✅ ADD admin
+            enum: ["razorpay", "system", "admin","order"], // ✅ ADD admin
             required: true
           },
 

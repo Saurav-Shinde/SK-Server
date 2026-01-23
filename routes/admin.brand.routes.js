@@ -3,6 +3,7 @@ import User from "../models/user.js";
 import BrandServiceChecklist from "../models/brandServiceChecklist.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/requireAdmin.js";
+import Order from "../models/order.js";
 
 const router = express.Router();
 
@@ -84,5 +85,56 @@ router.patch(
     res.json({ success: true });
   }
 );
+
+
+
+
+/* ================= GET ORDERS FOR BRAND ================= */
+router.get(
+  "/orders/:brandId",
+  authMiddleware,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { brandId } = req.params;
+
+      const orders = await Order.find({ brand: brandId })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      res.json(orders);
+    } catch (err) {
+      console.error("Failed to fetch orders:", err);
+      res.status(500).json({ message: "Failed to fetch orders" });
+    }
+  }
+);
+
+/* ================= UPDATE ORDER STATUS ================= */
+router.patch(
+  "/orders/:orderId",
+  authMiddleware,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { status } = req.body;
+
+      const order = await Order.findById(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      order.status = status;
+      await order.save();
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Failed to update order:", err);
+      res.status(500).json({ message: "Failed to update order" });
+    }
+  }
+);
+
 
 export default router;
