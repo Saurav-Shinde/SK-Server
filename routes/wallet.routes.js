@@ -217,7 +217,8 @@ router.post("/pay", authMiddleware, async (req, res) => {
       items,
       amount: payAmount,
       paymentMethod: "wallet",
-      status: "PLACED"
+      status: "PLACED",
+      isSeenByAdmin: false
     });
 
     res.json({

@@ -13,13 +13,41 @@ router.get(
   authMiddleware,
   requireAdmin,
   async (req, res) => {
-    const brands = await User.find({})
-      .select("brandName email wallet")
-      .sort({ createdAt: -1 });
+    try {
+      // 1️⃣ Get ALL brands safely
+      const brands = await User.find({
+        brandName: { $exists: true }
+      })
+        .select("brandName email wallet role")
+        .sort({ createdAt: -1 })
+        .lean();
 
-    res.json(brands);
+      // 2️⃣ Get unseen orders
+      const unseenOrders = await Order.find({
+        isSeenByAdmin: false
+      }).select("brand");
+
+      // 3️⃣ Build lookup set
+      const brandIdsWithOrders = new Set(
+        unseenOrders.map(o => o.brand.toString())
+      );
+
+      // 4️⃣ Attach hasNewOrder flag
+      const result = brands.map(brand => ({
+        ...brand,
+        hasNewOrder: brandIdsWithOrders.has(
+          brand._id.toString()
+        )
+      }));
+
+      res.json(result);
+    } catch (err) {
+      console.error("Failed to load brands", err);
+      res.status(500).json({ message: "Failed to load brands" });
+    }
   }
 );
+
 
 /* ================= GET SERVICES ================= */
 router.get(
@@ -102,6 +130,12 @@ router.get(
         .sort({ createdAt: -1 })
         .lean();
 
+      // 👇 MARK AS SEEN
+      await Order.updateMany(
+        { brand: brandId, isSeenByAdmin: false },
+        { $set: { isSeenByAdmin: true } }
+      );
+
       res.json(orders);
     } catch (err) {
       console.error("Failed to fetch orders:", err);
@@ -109,6 +143,7 @@ router.get(
     }
   }
 );
+
 
 /* ================= UPDATE ORDER STATUS ================= */
 router.patch(

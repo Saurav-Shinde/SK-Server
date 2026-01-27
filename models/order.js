@@ -26,7 +26,12 @@ const orderSchema = new mongoose.Schema(
       type: String,
       enum: ["PLACED", "PREPARING", "COMPLETED", "CANCELLED"],
       default: "PLACED"
+    },
+    isSeenByAdmin: {
+      type: Boolean,
+      default: false
     }
+
   },
   { timestamps: true }
 );
