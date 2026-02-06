@@ -16,9 +16,12 @@ import brandProfileRoutes from "./routes/brand.profile.routes.js";
 import meetingRoutes from './routes/meeting.routes.js'
 import stockRoutes from "./routes/stock.routes.js";
 import walletRoutes from "./routes/wallet.routes.js";
-import costingRoutes from "./routes/costing.routes.js";
 import vendorEligibilityRoutes from"./routes/vendorEligibility.routes.js"
 import servicesRoutes from "./routes/services.routes.js"
+import inventoryRoutes from "./routes/inventory.routes.js";
+import mainRecipeRoutes from "./routes/mainrecipe.routes.js";
+import subRecipeRoutes from "./routes/subrecipe.routes.js";
+import costingsRoutes from "./routes/costing.routes.js";
 
 dotenv.config()
 connectDB()
@@ -75,9 +78,12 @@ app.use("/api/brand", brandProfileRoutes);
 app.use('/api/meeting', meetingRoutes)
 app.use("/api", stockRoutes);
 app.use("/api/wallet", walletRoutes);
-app.use("/api", costingRoutes);
 app.use("/api/vendor-eligibility", vendorEligibilityRoutes);
 app.use("/api/services", servicesRoutes);
+app.use("/api/inventory", inventoryRoutes);
+app.use("/api/mainrecipes", mainRecipeRoutes);
+app.use("/api/subrecipes", subRecipeRoutes);
+app.use("/api/costing", costingsRoutes);
 
 app.get("/debug/db", async (req, res) => {
   const dbName = mongoose.connection.db.databaseName;

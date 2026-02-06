@@ -1,12 +1,17 @@
 import express from "express";
-import getFoodCost from "../controllers/costing.controller.js";
-import { getDishList } from "../controllers/costing.controller.js";
-import { getAllDishesSummary } from "../controllers/costing.controller.js";
+import {
+  getMainRecipes,
+  calculateFoodCost,
+  getSummary,
+} from "../controllers/costing.controller.js";
+import { authMiddleware } from "../middleware/auth.js";
 
 const router = express.Router();
-router.get("/food-cost/summary", getAllDishesSummary);
-router.get("/food-cost/dishList", getDishList);
-router.get("/food-cost/:dishName", getFoodCost);
+
+router.get("/recipes", authMiddleware, getMainRecipes);
+router.post("/calculate",authMiddleware, calculateFoodCost);
+// routes/costing.routes.js
+router.get("/summary",authMiddleware, getSummary);
 
 
 export default router;

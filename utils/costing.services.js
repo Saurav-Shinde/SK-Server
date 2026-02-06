@@ -2,94 +2,104 @@ import ItemMaster from "../models/itemMaster.js";
 import SubRecipe from "../models/subRecipe.js";
 import MainRecipe from "../models/mainRecipe.js";
 
-/**
- * Normalize helper
- */
+/* ---------------- HELPERS ---------------- */
+
 const normalize = (uom) =>
-  uom?.toString().toUpperCase().replace("PCS", "PC");
+  typeof uom === "string"
+    ? uom.toUpperCase().replace("PCS", "PC")
+    : "";
+
+const safeTrim = (v) =>
+  typeof v === "string" ? v.trim() : "";
+
+/* ---------------- INGREDIENT COST ---------------- */
 
 const getIngredientCost = async (itemName, qty, uom) => {
+  const name = safeTrim(itemName);
+  if (!name) throw new Error("Ingredient name missing");
+
   const item = await ItemMaster.findOne({
-    itemName: { $regex: `^${itemName.trim()}$`, $options: "i" },
+    itemName: { $regex: `^${name}$`, $options: "i" },
   });
 
   if (!item) {
-    throw new Error(`Item not found in Item Master: ${itemName}`);
+    throw new Error(`Item not found in Item Master: ${name}`);
   }
 
-  const price = Number(item.netPrice);
-
-  if (!price || price <= 0) {
-    throw new Error(`Invalid price for item: ${itemName}`);
+  const price = Number(item.netPrice || 0);
+  if (price <= 0) {
+    throw new Error(`Invalid price for item: ${name}`);
   }
 
   const itemUom = normalize(item.uom);
   const rowUom = normalize(uom);
+  const quantity = Number(qty || 0);
 
-  // PC based
   if (itemUom === "PC" || rowUom === "PC") {
-    return price * qty;
+    return price * quantity;
   }
 
-  // KG → GM
-  return (price / 1000) * qty;
+  return (price / 1000) * quantity;
 };
 
+/* ---------------- SUB-RECIPE COST ---------------- */
 
-/**
- * Sub-recipe cost per gram
- */
 const getSubRecipeCostPerGram = async (bomName) => {
+  const name = safeTrim(bomName);
+  if (!name) throw new Error("SubRecipe name missing");
+
   const rows = await SubRecipe.find({
-    bomName: bomName.trim(),
+    bomName: { $regex: `^${name}$`, $options: "i" },
   });
 
   if (!rows.length) {
-    throw new Error(`SubRecipe not found: ${bomName}`);
+    throw new Error(`SubRecipe not found: ${name}`);
   }
 
-  // 🔥 SAFE YIELD RESOLUTION
-  const rawYield =
+  const yieldQty = Number(
     rows[0].yield ??
-    rows[0].Yield ??
-    rows[0]["Yield"];
+    rows[0]["Yield"] ??
+    0
+  );
 
-  const yieldQty = Number(rawYield);
-
-  if (!yieldQty || isNaN(yieldQty) || yieldQty <= 0) {
-    throw new Error(`Invalid yield for SubRecipe: ${bomName}`);
+  if (yieldQty <= 0) {
+    throw new Error(`Invalid yield for SubRecipe: ${name}`);
   }
 
   const totalCost = rows.reduce(
-    (sum, r) =>
-      sum +
-      Number(
-        r.quantityPrice ??
-        r["Quantity Price"] ??
-        0
-      ),
+    (sum, r) => sum + Number(r.quantityPrice || 0),
     0
   );
 
   return totalCost / yieldQty;
 };
 
+/* ---------------- MAIN RECIPE COST ---------------- */
 
-/**
- * MAIN RECIPE COST
- */
-export const calculateMainRecipeCost = async (dishName,wastagePercent = 5) => {
-  console.log("Dish lookup:", dishName);
-  
+export const calculateMainRecipeCost = async (
+  dishName,
+  wastagePercent = 5,
+  brandName
+) => {
+  const dish = safeTrim(dishName);
+  const brand = safeTrim(brandName);
+
+  if (!dish || !brand) {
+    throw new Error("Dish name or brand missing");
+  }
+
+  const brandRegex = new RegExp(
+    brand.split(/\s+/)[0],
+    "i"
+  );
 
   const rows = await MainRecipe.find({
-    "BOM NAME": { $regex: `^${dishName.trim()}$`, $options: "i" },
+    bomName: { $regex: `^${dish}$`, $options: "i" },
+    brand: brandRegex,
   });
 
-  console.log("RAW ROWS COUNT:", rows.length);
-
   if (!rows.length) {
-    throw new Error(`Dish not found: ${dishName}`);
+    throw new Error(`Dish not found for brand: ${dish}`);
   }
 
   let totalFoodCost = 0;
@@ -97,69 +107,63 @@ export const calculateMainRecipeCost = async (dishName,wastagePercent = 5) => {
   const breakdown = [];
 
   for (const row of rows) {
-    console.log("Processing row:", row["ITEM DESCIPTION"]);
-    const rawCategory =
-    row.category ??
-    row["Food/Packaging"] ??
-    row["Food Packaging"] ??
-    row["Food/Packaging "] ??
-    row.FoodPackaging;
+    const type = row.TYPE ?? row.type ?? "";
+    const qty = Number(row.Quantity ?? row.quantity ?? 0);
+    const uom = row.UOM ?? row.uom;
 
-  // 🔥 NORMALIZE VALUE
-  const category = rawCategory?.toString().trim().toUpperCase();
+    const category = String(row["Food/Packeging"] || "")
+  .trim()
+  .toUpperCase();
+
+
+
 
     let cost = 0;
 
-    if (row.TYPE === "Ingredient") {
-      cost = await getIngredientCost(
-        row["ITEM DESCIPTION"],
-        row.Quantity,
-        row.UOM
-      );
+    const itemDesc =
+      row["ITEM DESCIPTION"] ??
+      row.itemDescription ??
+      "";
+
+    if (type === "Ingredient") {
+      cost = await getIngredientCost(itemDesc, qty, uom);
     }
 
-    if (row.TYPE === "SubRecipe") {
-      const costPerGram = await getSubRecipeCostPerGram(
-        row["ITEM DESCIPTION"]
-      );
-      cost = costPerGram * row.Quantity;
+    if (type === "SubRecipe") {
+      const costPerGram = await getSubRecipeCostPerGram(itemDesc);
+      cost = costPerGram * qty;
     }
 
-    if (category === "F") {
-    totalFoodCost += cost;
-  }
-
-  // ✅ PACKAGING COST
-  if (category === "P") {
-    totalPackagingCost += cost;
-  }
+    if (category === "F") totalFoodCost += cost;
+    if (category === "P") totalPackagingCost += cost;
 
     breakdown.push({
-      item: row["ITEM DESCIPTION"],
-      type: row.TYPE,
+      item: itemDesc,
+      type,
       category,
-      quantity: row.Quantity,
+      quantity: qty,
       cost: Number(cost.toFixed(2)),
     });
   }
+
   const wastageRate = Number(wastagePercent) / 100;
+  if (isNaN(wastageRate) || wastageRate < 0) {
+    throw new Error("Invalid wastage percentage");
+  }
 
-if (isNaN(wastageRate) || wastageRate < 0) {
-  throw new Error("Invalid wastage percentage");
-}
+  const wastageCost = totalFoodCost * wastageRate;
 
-const wastageCost = totalFoodCost * wastageRate;
-
-  const totalCost =
-    totalFoodCost + totalPackagingCost + wastageCost;
   return {
-  dishName,
-  totalFoodCost: Number(totalFoodCost.toFixed(2)),
-  totalPackagingCost: Number(totalPackagingCost.toFixed(2)),
-  wastagePercent,
-  wastageCost: Number(wastageCost.toFixed(2)),
-  totalCost: Number(totalCost.toFixed(2)),
-  breakdown,
-};
-
+    dishName: dish,
+    totalFoodCost: +totalFoodCost.toFixed(2),
+    totalPackagingCost: +totalPackagingCost.toFixed(2),
+    wastagePercent,
+    wastageCost: +wastageCost.toFixed(2),
+    totalCost: +(
+      totalFoodCost +
+      totalPackagingCost +
+      wastageCost
+    ).toFixed(2),
+    breakdown,
+  };
 };
