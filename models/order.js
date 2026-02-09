@@ -30,6 +30,16 @@ const orderSchema = new mongoose.Schema(
     isSeenByAdmin: {
       type: Boolean,
       default: false
+    },
+    isReceived: {
+      type: Boolean,
+      default: false
+    },
+    receivedAt: {
+      type: Date
+    },
+    completedAt: {
+      type: Date
     }
 
   },

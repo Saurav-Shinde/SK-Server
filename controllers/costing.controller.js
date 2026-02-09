@@ -1,14 +1,16 @@
 import MainRecipe from "../models/mainrecipe.models.js";
 import SubRecipe from "../models/subrecipe.models.js";
+import { brandsMatch } from "../utils/brandMatch.js";
 
 /* ================= GET MAIN RECIPES ================= */
 
 export const getMainRecipes = async (req, res) => {
-  const recipes = await MainRecipe.find(
-    { brand },
-    "recipeName brand"
-  );
-
+  const userBrandName = req.user?.brandName;
+  if (!userBrandName) {
+    return res.status(403).json({ message: "Brand not linked to this account" });
+  }
+  const allRecipes = await MainRecipe.find({}, "recipeName brand").lean();
+  const recipes = allRecipes.filter(r => brandsMatch(userBrandName, r.brand));
   res.json(recipes);
 };
 
@@ -21,10 +23,15 @@ const normalizeCategory = (category) => {
 
 export const calculateFoodCost = async (req, res) => {
   const { recipeName, wastagePercent = 0 } = req.body;
+  const userBrandName = req.user?.brandName;
+  if (!userBrandName) {
+    return res.status(403).json({ message: "Brand not linked to this account" });
+  }
 
-  const mainRecipe = await MainRecipe.findOne({ recipeName });
+  const recipes = await MainRecipe.find({ recipeName }).lean();
+  const mainRecipe = recipes.find(r => brandsMatch(userBrandName, r.brand));
   if (!mainRecipe) {
-    return res.status(404).json({ message: "Recipe not found" });
+    return res.status(404).json({ message: "Recipe not found for your brand" });
   }
 
   let breakdown = [];
@@ -133,21 +140,13 @@ const calculateCost = ({ quantity, netPrice, uom }) => {
 /* ================= SUMMARY ================= */
 
 export const getSummary = async (req, res) => {
-  console.log(req.user.brand);
-  const wastagePercent = Number(req.query.wastagePercent || 0);
-  const brandName = req.query.brandName;
-
-  const filter = {};
-
-  if (brandName) {
-    // substring match on brand
-    filter.brand = { $regex: brandName, $options: "i" };
+  const userBrandName = req.user?.brandName;
+  if (!userBrandName) {
+    return res.status(403).json({ message: "Brand not linked to this account" });
   }
 
-  const recipes = await MainRecipe.find(
-    { brandName },
-    "recipeName brand"
-  );
+  const allRecipes = await MainRecipe.find({}, "recipeName brand").lean();
+  const recipes = allRecipes.filter(r => brandsMatch(userBrandName, r.brand));
 
   const summary = [];
 

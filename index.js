@@ -22,6 +22,7 @@ import inventoryRoutes from "./routes/inventory.routes.js";
 import mainRecipeRoutes from "./routes/mainrecipe.routes.js";
 import subRecipeRoutes from "./routes/subrecipe.routes.js";
 import costingsRoutes from "./routes/costing.routes.js";
+import orderRoutes from "./routes/order.routes.js";
 
 dotenv.config()
 connectDB()
@@ -84,6 +85,7 @@ app.use("/api/inventory", inventoryRoutes);
 app.use("/api/mainrecipes", mainRecipeRoutes);
 app.use("/api/subrecipes", subRecipeRoutes);
 app.use("/api/costing", costingsRoutes);
+app.use("/api", orderRoutes);
 
 app.get("/debug/db", async (req, res) => {
   const dbName = mongoose.connection.db.databaseName;

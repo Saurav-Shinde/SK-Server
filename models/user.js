@@ -30,6 +30,15 @@ const userSchema = new mongoose.Schema(
     // 💳 Paid wallet
     wallet: {
       balance: { type: Number, default: 0 },
+      dueAmount: {
+        type: Number,
+        default: 0
+      },
+
+      dueReason: {
+        type: String,
+        default: null
+      },
       transactions: [
         {
           amount: Number,

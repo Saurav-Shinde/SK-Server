@@ -4,6 +4,7 @@ import crypto from "crypto";
 import User from "../models/user.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { sendWalletTransactionEmail } from "../utils/walletMailer.js";
+import { sendOrderNotificationEmails } from "../utils/orderMailer.js";
 import { requireAdmin } from "../middleware/requireAdmin.js";
 import Order from "../models/order.js";
 
@@ -21,19 +22,24 @@ router.get("/", authMiddleware, async (req, res) => {
     if (!user || !user.wallet) {
       return res.json({
         balance: 0,
+        dueAmount: 0,
+        dueReason: null,
         transactions: []
       });
     }
 
     res.json({
-      balance: user.wallet.balance,
-      transactions: user.wallet.transactions
+      balance: user.wallet.balance || 0,
+      dueAmount: user.wallet.dueAmount || 0,
+      dueReason: user.wallet.dueReason || null,
+      transactions: user.wallet.transactions || []
     });
   } catch (err) {
     console.error("Wallet fetch error:", err);
     res.status(500).json({ message: "Wallet fetch failed" });
   }
 });
+
 
 
 
@@ -104,6 +110,24 @@ router.post("/verify", authMiddleware, async (req, res) => {
     const amt = Number(amount);
 
     user.wallet.balance += amt;
+    // ----------------- AUTO CLEAR DUE -----------------
+    if (user.wallet.dueAmount > 0) {
+      const adjusted = Math.min(user.wallet.balance, user.wallet.dueAmount);
+
+      user.wallet.balance -= adjusted;
+      user.wallet.dueAmount -= adjusted;
+
+      user.wallet.transactions.push({
+        amount: adjusted,
+        type: "debit",
+        source: "system",
+        reason: "Due adjustment"
+      });
+
+      if (user.wallet.dueAmount === 0) {
+        user.wallet.dueReason = null;
+      }
+    }
 
     user.wallet.transactions.push({
       amount: amt,
@@ -221,6 +245,17 @@ router.post("/pay", authMiddleware, async (req, res) => {
       isSeenByAdmin: false
     });
 
+    /* ================= SEND ORDER NOTIFICATION EMAILS ================= */
+    try {
+      await sendOrderNotificationEmails({
+        order,
+        userEmail: user.email,
+        brandName: user.brandName,
+      });
+    } catch (emailErr) {
+      console.error("Order notification email error:", emailErr);
+    }
+
     res.json({
       success: true,
       orderId: order._id,
@@ -233,6 +268,45 @@ router.post("/pay", authMiddleware, async (req, res) => {
   }
 });
 
+// ----------------- Admin: Add Due Amount -----------------
+router.post(
+  "/admin/wallet/due",
+  authMiddleware,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { userId, amount, reason } = req.body;
+
+      if (!userId || !amount || amount <= 0) {
+        return res.status(400).json({ message: "Invalid input" });
+      }
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ message: "Brand not found" });
+      }
+
+      if (!user.wallet) {
+        user.wallet = { balance: 0, transactions: [] };
+      }
+
+      user.wallet.dueAmount =
+        Number(user.wallet.dueAmount || 0) + Number(amount);
+
+      user.wallet.dueReason = reason || "Pending payment";
+
+      await user.save();
+
+      res.json({
+        success: true,
+        dueAmount: user.wallet.dueAmount
+      });
+    } catch (err) {
+      console.error("Add due error:", err);
+      res.status(500).json({ message: "Failed to add due" });
+    }
+  }
+);
 
 
 export default router;

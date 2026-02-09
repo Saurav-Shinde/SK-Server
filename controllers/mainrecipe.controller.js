@@ -1,20 +1,56 @@
 import MainRecipe from "../models/mainrecipe.models.js";
+import { brandsMatch } from "../utils/brandMatch.js";
 
 export const getDishList = async (req, res) => {
   try {
-    const recipes = await MainRecipe.find(
+    const userBrandName = req.user?.brandName;
+    
+    if (!userBrandName) {
+      return res.status(403).json({ 
+        message: "Brand not linked to this account" 
+      });
+    }
+
+    const allRecipes = await MainRecipe.find(
       {},
-      { recipeName: 1, _id: 0 }
+      { recipeName: 1, brand: 1, _id: 0 }
     )
       .sort({ recipeName: 1 })
       .lean();
 
+    const recipes = allRecipes.filter(r => brandsMatch(userBrandName, r.brand));
+
     res.json({
-      dishes: recipes.map(r => r.recipeName),
+      dishes: [...new Set(recipes.map(r => r.recipeName))],
     });
   } catch (err) {
     console.error("GET DISH LIST ERROR:", err);
     res.status(500).json({ message: "Failed to fetch dishes" });
+  }
+};
+
+export const getRecipeByName = async (req, res) => {
+  try {
+    const { recipeName } = req.params;
+    const userBrandName = req.user?.brandName;
+    
+    if (!userBrandName) {
+      return res.status(403).json({ 
+        message: "Brand not linked to this account" 
+      });
+    }
+
+    const recipes = await MainRecipe.find({ recipeName }).lean();
+    const recipe = recipes.find(r => brandsMatch(userBrandName, r.brand));
+
+    if (!recipe) {
+      return res.status(404).json({ message: "Recipe not found" });
+    }
+
+    res.json(recipe);
+  } catch (err) {
+    console.error("GET RECIPE BY NAME ERROR:", err);
+    res.status(500).json({ message: "Failed to fetch recipe" });
   }
 };
 

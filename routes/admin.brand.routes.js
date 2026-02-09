@@ -4,6 +4,7 @@ import BrandServiceChecklist from "../models/brandServiceChecklist.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/requireAdmin.js";
 import Order from "../models/order.js";
+import { getAllRecipes, getRecipeBreakdown } from "../controllers/admin.recipes.controller.js";
 
 const router = express.Router();
 
@@ -57,35 +58,50 @@ router.get(
   async (req, res) => {
     const { brandId } = req.params;
 
+    const MASTER_SERVICES = [
+      "Vendor sourcing & negotiation",
+      "In-store branding (circle banner)",
+      "Kitchen operations setup & workflow planning",
+      "Waste & yield management system",
+      "Menu engineering",
+      "SOP creation",
+      "Food tasting and trials",
+      "Recipe development",
+      "Pricing strategy and discounting",
+      "Inventory - Process and storage",
+      "Market research and competitor study",
+      "Shelf life testing & documentation",
+      "Food cost ratio - preparation",
+      "Order flow integration - KDS, POS",
+      "Branding - naming, positioning",
+    ];
+
     let checklist = await BrandServiceChecklist.findOne({ brandId });
 
-    // If first time → initialize checklist
+    // First time → create
     if (!checklist) {
       checklist = await BrandServiceChecklist.create({
         brandId,
-        services: [
-          "Vendor sourcing & negotiation",
-          "In-store branding (circle banner)",
-          "Kitchen operations setup & workflow planning",
-          "Waste & yield management system",
-          "Menu engineering",
-          "SOP creation",
-          "Food tasting and trials",
-          "Recipe development",
-          "Pricing strategy and discounting",
-          "Inventory - Process and storage",
-          "Market research and competitor study",
-          "Shelf life testing & documentation",
-          "Food cost ratio - preparation",
-          "Order flow integration - KDS, POS",
-          "Branding - naming, positioning"
-        ].map(name => ({ name }))
+        services: MASTER_SERVICES.map(name => ({ name }))
       });
+    } else {
+      // 🔥 ADD MISSING SERVICES
+      const existingNames = checklist.services.map(s => s.name);
+
+      const missing = MASTER_SERVICES
+        .filter(name => !existingNames.includes(name))
+        .map(name => ({ name }));
+
+      if (missing.length) {
+        checklist.services.push(...missing);
+        await checklist.save();
+      }
     }
 
     res.json(checklist);
   }
 );
+
 
 /* ================= UPDATE SERVICE ================= */
 router.patch(
@@ -161,9 +177,15 @@ router.patch(
       }
 
       order.status = status;
+      
+      // Set completedAt timestamp when marking as COMPLETED
+      if (status === "COMPLETED" && !order.completedAt) {
+        order.completedAt = new Date();
+      }
+      
       await order.save();
 
-      res.json({ success: true });
+      res.json({ success: true, order });
     } catch (err) {
       console.error("Failed to update order:", err);
       res.status(500).json({ message: "Failed to update order" });
@@ -171,5 +193,20 @@ router.patch(
   }
 );
 
+
+/* ================= ADMIN: ALL RECIPES ================= */
+router.get(
+  "/recipes",
+  authMiddleware,
+  requireAdmin,
+  getAllRecipes
+);
+
+router.get(
+  "/recipes/:recipeId/breakdown",
+  authMiddleware,
+  requireAdmin,
+  getRecipeBreakdown
+);
 
 export default router;
