@@ -8,6 +8,24 @@ import { getAllRecipes, getRecipeBreakdown } from "../controllers/admin.recipes.
 
 const router = express.Router();
 
+const MASTER_SERVICES = [
+  "Vendor sourcing & negotiation",
+  "In-store branding (circle banner)",
+  "Kitchen operations setup & workflow planning",
+  "Waste & yield management system",
+  "Menu engineering",
+  "SOP creation",
+  "Food tasting and trials",
+  "Recipe development",
+  "Pricing strategy and discounting",
+  "Inventory - Process and storage",
+  "Market research and competitor study",
+  "Shelf life testing & documentation",
+  "Food cost ratio - preparation",
+  "Order flow integration - KDS, POS",
+  "Branding - naming, positioning",
+];
+
 /* ================= BRANDS ================= */
 router.get(
   "/brands",
@@ -58,24 +76,6 @@ router.get(
   async (req, res) => {
     const { brandId } = req.params;
 
-    const MASTER_SERVICES = [
-      "Vendor sourcing & negotiation",
-      "In-store branding (circle banner)",
-      "Kitchen operations setup & workflow planning",
-      "Waste & yield management system",
-      "Menu engineering",
-      "SOP creation",
-      "Food tasting and trials",
-      "Recipe development",
-      "Pricing strategy and discounting",
-      "Inventory - Process and storage",
-      "Market research and competitor study",
-      "Shelf life testing & documentation",
-      "Food cost ratio - preparation",
-      "Order flow integration - KDS, POS",
-      "Branding - naming, positioning",
-    ];
-
     let checklist = await BrandServiceChecklist.findOne({ brandId });
 
     // First time → create
@@ -99,6 +99,56 @@ router.get(
     }
 
     res.json(checklist);
+  }
+);
+
+
+/* ================= ADD NEW SERVICE (per brand) ================= */
+router.post(
+  "/services/:brandId",
+  authMiddleware,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { brandId } = req.params;
+      const { serviceName } = req.body;
+
+      const name = typeof serviceName === "string" ? serviceName.trim() : "";
+      if (!name) {
+        return res.status(400).json({ message: "Service name is required" });
+      }
+
+      let checklist = await BrandServiceChecklist.findOne({ brandId });
+
+      if (!checklist) {
+        checklist = await BrandServiceChecklist.create({
+          brandId,
+          services: MASTER_SERVICES.map(n => ({ name: n })),
+        });
+      } else {
+        const existingNames = checklist.services.map(s => s.name);
+        const missing = MASTER_SERVICES
+          .filter(n => !existingNames.includes(n))
+          .map(n => ({ name: n }));
+        if (missing.length) {
+          checklist.services.push(...missing);
+          await checklist.save();
+        }
+      }
+
+      const existingNames = checklist.services.map(s => s.name);
+      if (existingNames.includes(name)) {
+        return res.status(400).json({ message: "Service already exists" });
+      }
+
+      checklist.services.push({ name });
+      await checklist.save();
+
+      res.json(checklist);
+    } catch (err) {
+      console.error("Failed to add service:", err);
+      res.status(500).json({ message: "Failed to add service" });
+    }
   }
 );
 
@@ -131,6 +181,42 @@ router.patch(
 );
 
 
+/* ================= DELETE SERVICE (per brand) ================= */
+router.delete(
+  "/services/:brandId",
+  authMiddleware,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { brandId } = req.params;
+      const { serviceName } = req.body;
+
+      const name = typeof serviceName === "string" ? serviceName.trim() : "";
+      if (!name) {
+        return res.status(400).json({ message: "Service name is required" });
+      }
+
+      const checklist = await BrandServiceChecklist.findOne({ brandId });
+      if (!checklist) {
+        return res.status(404).json({ message: "Checklist not found" });
+      }
+
+      const before = checklist.services.length;
+      checklist.services = checklist.services.filter(
+        (s) => s.name !== name
+      );
+      if (checklist.services.length === before) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+
+      await checklist.save();
+      res.json(checklist);
+    } catch (err) {
+      console.error("Failed to delete service:", err);
+      res.status(500).json({ message: "Failed to delete service" });
+    }
+  }
+);
 
 
 /* ================= GET ORDERS FOR BRAND ================= */
@@ -189,6 +275,33 @@ router.patch(
     } catch (err) {
       console.error("Failed to update order:", err);
       res.status(500).json({ message: "Failed to update order" });
+    }
+  }
+);
+
+
+/* ================= DELETE ORDER (completed only) ================= */
+router.delete(
+  "/orders/:orderId",
+  authMiddleware,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { orderId } = req.params;
+
+      const order = await Order.findById(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+      if (order.status !== "COMPLETED") {
+        return res.status(400).json({ message: "Only completed orders can be deleted" });
+      }
+
+      await Order.findByIdAndDelete(orderId);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Failed to delete order:", err);
+      res.status(500).json({ message: "Failed to delete order" });
     }
   }
 );

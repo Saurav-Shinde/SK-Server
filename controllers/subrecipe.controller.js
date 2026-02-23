@@ -1,4 +1,5 @@
 import SubRecipe from "../models/subrecipe.models.js";
+import { brandsMatch } from "../utils/brandMatch.js";
 
 /* ---------------- HELPER ---------------- */
 const calculateItemCost = (item) => {
@@ -18,7 +19,9 @@ export const getSubRecipes = async (req, res) => {
   try {
     const { brand } = req.query;
 
-    const filter = brand ? { brand } : {};
+    const filter = brand
+      ? { brand: { $regex: `^${String(brand).trim()}$`, $options: "i" } }
+      : {};
 
     const list = await SubRecipe.find(
       filter,
@@ -28,6 +31,35 @@ export const getSubRecipes = async (req, res) => {
     res.json(list);
   } catch (err) {
     console.error("GET SUBRECIPES ERROR:", err);
+    res.status(500).json({ message: "Failed to fetch subrecipes" });
+  }
+};
+
+/* ---------------- GET LIST FOR LOGGED-IN BRAND ---------------- */
+export const getSubRecipeDishList = async (req, res) => {
+  try {
+    const userBrandName = req.user?.brandName;
+
+    if (!userBrandName) {
+      return res.status(403).json({
+        message: "Brand not linked to this account",
+      });
+    }
+
+    const allSubrecipes = await SubRecipe.find(
+      {},
+      { recipeName: 1, brand: 1 }
+    )
+      .sort({ recipeName: 1 })
+      .lean();
+
+    const subRecipes = allSubrecipes.filter((r) =>
+      brandsMatch(userBrandName, r.brand)
+    );
+
+    res.json({ subRecipes });
+  } catch (err) {
+    console.error("GET SUBRECIPE DISH LIST ERROR:", err);
     res.status(500).json({ message: "Failed to fetch subrecipes" });
   }
 };

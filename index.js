@@ -1,6 +1,8 @@
 import express from 'express'
 import dotenv from 'dotenv'
 import cors from 'cors'
+import http from "http";
+import { Server as SocketIOServer } from "socket.io";
 import connectDB from './config/db.js'
 import authRoutes from './routes/auth.routes.js'
 import eligibilityRoutes from './routes/eligibility.routes.js'
@@ -23,11 +25,19 @@ import mainRecipeRoutes from "./routes/mainrecipe.routes.js";
 import subRecipeRoutes from "./routes/subrecipe.routes.js";
 import costingsRoutes from "./routes/costing.routes.js";
 import orderRoutes from "./routes/order.routes.js";
+import googleRoutes from "./routes/google.routes.js";
+import {
+  initializeCalendarSync,
+  startCalendarWatchRenewalScheduler,
+  watchCalendar,
+} from "./services/googleCalendar.service.js";
+import { startBookingSessionExpiryCron } from "./jobs/bookingSessionExpiry.job.js";
 
 dotenv.config()
 connectDB()
 
 const app = express()
+const server = http.createServer(app);
 
 const rawOrigins =
   process.env.CLIENT_ORIGIN ||
@@ -37,6 +47,23 @@ const allowedOrigins = rawOrigins
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
+
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ["GET", "POST"],
+  },
+});
+
+io.on("connection", (socket) => {
+  // Clients join their own room so server can emit targeted wallet updates.
+  socket.on("join:user", (userId) => {
+    if (userId) socket.join(String(userId));
+  });
+});
+
+app.set("io", io);
 
 app.use(
   cors({
@@ -86,6 +113,7 @@ app.use("/api/mainrecipes", mainRecipeRoutes);
 app.use("/api/subrecipes", subRecipeRoutes);
 app.use("/api/costing", costingsRoutes);
 app.use("/api", orderRoutes);
+app.use("/api/google", googleRoutes);
 
 app.get("/debug/db", async (req, res) => {
   const dbName = mongoose.connection.db.databaseName;
@@ -100,6 +128,36 @@ app.get("/debug/db", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`App listening on port ${PORT}`)
+  // Calendly booking session expiry scheduler (no webhooks/OAuth required).
+  startBookingSessionExpiryCron();
+  // 1) Ensure sync token exists for reliable incremental webhook processing.
+  initializeCalendarSync()
+    .then((result) => {
+      if (result?.enabled) {
+        console.log("Google Calendar sync token ready");
+      } else {
+        console.log("Google Calendar sync skipped:", result?.reason || "not configured");
+      }
+    })
+    .catch((err) => {
+      console.error("Failed to initialize Google Calendar sync:", err.message);
+    });
+
+  // 2) Start/refresh watch channel.
+  watchCalendar()
+    .then((result) => {
+      if (result?.enabled) {
+        console.log(`Google Calendar watch started: ${result.channelId}`);
+      } else {
+        console.log("Google Calendar watch skipped:", result?.reason || "not configured");
+      }
+    })
+    .catch((err) => {
+      console.error("Failed to start Google Calendar watch:", err.message);
+    });
+
+  // 3) Auto-renew watch every 6 days.
+  startCalendarWatchRenewalScheduler();
 })

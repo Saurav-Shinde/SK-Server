@@ -22,8 +22,12 @@ const normalizeCategory = (category) => {
 /* ================= CALCULATE COST ================= */
 
 export const calculateFoodCost = async (req, res) => {
-  const { recipeName, wastagePercent = 0 } = req.body;
-  const userBrandName = req.user?.brandName;
+  const { recipeName, wastagePercent = 0, brandName: bodyBrandName } = req.body;
+  // Admin can pass brandName in body to view a brand's recipe; otherwise use logged-in user's brand
+  const userBrandName =
+    req.user?.role === "admin" && bodyBrandName
+      ? bodyBrandName
+      : req.user?.brandName;
   if (!userBrandName) {
     return res.status(403).json({ message: "Brand not linked to this account" });
   }
