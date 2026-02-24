@@ -12,6 +12,7 @@ const MeetingSchema = new mongoose.Schema(
     endTime: Date,
     amountCharged: { type: Number, default: 0 },
     googleEventId: { type: String, unique: true, sparse: true },
+    meetLink: { type: String },
     status: {
       type: String,
       enum: ["scheduled", "cancelled", "rescheduled", "completed"],
@@ -24,7 +25,7 @@ const MeetingSchema = new mongoose.Schema(
     },
     source: {
       type: String,
-      enum: ["manual", "google_webhook"],
+      enum: ["manual", "google_direct"],
       default: "manual",
     },
   },

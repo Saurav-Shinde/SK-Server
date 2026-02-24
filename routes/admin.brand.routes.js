@@ -4,7 +4,15 @@ import BrandServiceChecklist from "../models/brandServiceChecklist.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireAdmin } from "../middleware/requireAdmin.js";
 import Order from "../models/order.js";
-import { getAllRecipes, getRecipeBreakdown } from "../controllers/admin.recipes.controller.js";
+import {
+  getAllRecipes,
+  getRecipeBreakdown,
+  getMainRecipeById,
+  updateMainRecipe,
+  getAdminSubRecipes,
+  getSubRecipeById,
+  updateSubRecipe,
+} from "../controllers/admin.recipes.controller.js";
 
 const router = express.Router();
 
@@ -320,6 +328,38 @@ router.get(
   authMiddleware,
   requireAdmin,
   getRecipeBreakdown
+);
+router.get(
+  "/recipes/:recipeId",
+  authMiddleware,
+  requireAdmin,
+  getMainRecipeById
+);
+router.put(
+  "/recipes/:recipeId",
+  authMiddleware,
+  requireAdmin,
+  updateMainRecipe
+);
+
+/* ================= ADMIN: SUBRECIPES (list, get by id, update) ================= */
+router.get(
+  "/subrecipes",
+  authMiddleware,
+  requireAdmin,
+  getAdminSubRecipes
+);
+router.get(
+  "/subrecipes/:id",
+  authMiddleware,
+  requireAdmin,
+  getSubRecipeById
+);
+router.put(
+  "/subrecipes/:id",
+  authMiddleware,
+  requireAdmin,
+  updateSubRecipe
 );
 
 export default router;

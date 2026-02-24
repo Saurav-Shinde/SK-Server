@@ -2,11 +2,10 @@ import {
   getAuthenticatedCalendarClient,
   hasStoredRefreshToken,
 } from "../services/googleTokenManager.js";
-import CalendarSync from "../models/calendarSync.model.js";
 
 /**
  * GET /api/google/debug
- * Self-diagnostics for Google Calendar OAuth + watch + webhook.
+ * Self-diagnostics for Google Calendar OAuth (no webhooks).
  */
 export const getGoogleDebug = async (req, res) => {
   const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
@@ -37,27 +36,10 @@ export const getGoogleDebug = async (req, res) => {
     }
   } catch {}
 
-  const calendarId = process.env.GOOGLE_CALENDAR_ID;
-  const syncDoc = calendarId
-    ? await CalendarSync.findOne({ calendarId }).lean()
-    : null;
-
-  const watchActive = !!(syncDoc?.channelId && syncDoc?.resourceId);
-  const webhookUrl = process.env.GOOGLE_WEBHOOK_ADDRESS;
-  const webhookReachable = !!(
-    webhookUrl &&
-    (webhookUrl.startsWith("https://") || webhookUrl.startsWith("http://"))
-  );
-
   res.json({
     oauthConfigured,
     refreshTokenStored,
     accessTokenValid,
     calendarAccessible,
-    watchActive,
-    webhookReachable,
-    lastEventFetched: syncDoc?.lastEventFetched ?? null,
-    lastWebhookReceived: syncDoc?.lastWebhookReceived ?? null,
-    lastError: syncDoc?.lastError ?? null,
   });
 };

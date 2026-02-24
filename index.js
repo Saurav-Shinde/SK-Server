@@ -26,14 +26,10 @@ import subRecipeRoutes from "./routes/subrecipe.routes.js";
 import costingsRoutes from "./routes/costing.routes.js";
 import orderRoutes from "./routes/order.routes.js";
 import googleRoutes from "./routes/google.routes.js";
-import {
-  initializeCalendarSync,
-  startCalendarWatchRenewalScheduler,
-  watchCalendar,
-} from "./services/googleCalendar.service.js";
-import { startBookingSessionExpiryCron } from "./jobs/bookingSessionExpiry.job.js";
+import { validateEnv } from "./utils/envValidator.js";
 
 dotenv.config()
+validateEnv();
 connectDB()
 
 const app = express()
@@ -129,35 +125,5 @@ app.get("/debug/db", async (req, res) => {
 
 const PORT = process.env.PORT || 5000
 server.listen(PORT, () => {
-  console.log(`App listening on port ${PORT}`)
-  // Calendly booking session expiry scheduler (no webhooks/OAuth required).
-  startBookingSessionExpiryCron();
-  // 1) Ensure sync token exists for reliable incremental webhook processing.
-  initializeCalendarSync()
-    .then((result) => {
-      if (result?.enabled) {
-        console.log("Google Calendar sync token ready");
-      } else {
-        console.log("Google Calendar sync skipped:", result?.reason || "not configured");
-      }
-    })
-    .catch((err) => {
-      console.error("Failed to initialize Google Calendar sync:", err.message);
-    });
-
-  // 2) Start/refresh watch channel.
-  watchCalendar()
-    .then((result) => {
-      if (result?.enabled) {
-        console.log(`Google Calendar watch started: ${result.channelId}`);
-      } else {
-        console.log("Google Calendar watch skipped:", result?.reason || "not configured");
-      }
-    })
-    .catch((err) => {
-      console.error("Failed to start Google Calendar watch:", err.message);
-    });
-
-  // 3) Auto-renew watch every 6 days.
-  startCalendarWatchRenewalScheduler();
+  console.log(`App listening on port ${PORT}`);
 })

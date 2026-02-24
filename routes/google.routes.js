@@ -1,7 +1,6 @@
 import express from "express";
 import { getOAuth2Client, storeTokens } from "../services/googleTokenManager.js";
 import { getGoogleDebug } from "../controllers/googleDebug.controller.js";
-import { startGoogleWatch } from "../services/googleCalendar.service.js";
 
 const CAL_SCOPE = ["https://www.googleapis.com/auth/calendar"];
 
@@ -50,13 +49,6 @@ router.get("/callback", async (req, res) => {
     const { tokens } = await oauth2.getToken(code);
     await storeTokens(tokens);
 
-    // 🔥 IMPORTANT: start calendar now that token exists
-    try {
-      await startGoogleWatch(true); // force restart
-    } catch (e) {
-      console.error("Watch start failed after auth:", e.message);
-    }
-    
     res.send(
       "<h2>Google Calendar connected successfully</h2><p>You can close this window. The server will use this authorization for calendar operations.</p>"
     );
