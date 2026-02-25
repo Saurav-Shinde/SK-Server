@@ -13,6 +13,10 @@ import {
   getSubRecipeById,
   updateSubRecipe,
 } from "../controllers/admin.recipes.controller.js";
+import {
+  listAllIngredients,
+  bulkUpdateIngredientPrices,
+} from "../controllers/admin.ingredients.controller.js";
 
 const router = express.Router();
 
@@ -360,6 +364,20 @@ router.put(
   authMiddleware,
   requireAdmin,
   updateSubRecipe
+);
+
+/* ================= ADMIN: INGREDIENTS (GLOBAL PRICE UPDATE) ================= */
+router.get(
+  "/ingredients",
+  authMiddleware,
+  requireAdmin,
+  listAllIngredients
+);
+router.post(
+  "/ingredients/bulk-update",
+  authMiddleware,
+  requireAdmin,
+  bulkUpdateIngredientPrices
 );
 
 export default router;

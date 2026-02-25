@@ -236,14 +236,69 @@ router.post("/pay", authMiddleware, async (req, res) => {
     await user.save();
 
     /* ================= CREATE ORDER ================= */
-    const order = await Order.create({
-      brand: user._id,
-      items,
-      amount: payAmount,
-      paymentMethod: "wallet",
-      status: "PLACED",
-      isSeenByAdmin: false
-    });
+    /* ================= NORMALIZE ITEMS FROM BREAKDOWN ================= */
+
+const normalizedItems = items.map(item => {
+
+  let breakdown = item.breakdown;
+
+  // 🔥 FORCE SAFE OBJECT CONVERSION
+  if (typeof breakdown === "string") {
+    try {
+      breakdown = JSON.parse(breakdown);
+    } catch {
+      // convert JS object string -> real object
+      if (typeof breakdown === "string") {
+        try {
+          breakdown = JSON.parse(breakdown);
+        } catch {
+          breakdown = [];
+        }
+      }
+    }
+  }
+
+  if (!Array.isArray(breakdown)) breakdown = [];
+
+  breakdown = breakdown.map(r => ({
+    item: String(r.item || ""),
+    type: String(r.type || ""),
+    qty: Number(r.qty || 0),
+    uom: String(r.uom || ""),
+    cost: Number(r.cost || 0),
+    level: Number(r.level || 0)
+  }));
+
+    return {
+    dish: item.dish,
+    qty: Number(item.qty || 1),   // TRUST FRONTEND
+    price: Number(item.price) || 0,
+    total: Number(item.total) || 0,
+    breakdown
+  };
+});
+
+
+console.log("========= ORDER DEBUG =========");
+console.log(JSON.stringify(normalizedItems, null, 2));
+console.log("TYPE CHECK:");
+normalizedItems.forEach((item, i) => {
+  console.log("item", i, typeof item);
+  console.log("breakdown is array:", Array.isArray(item.breakdown));
+  if (item.breakdown)
+    item.breakdown.forEach((b, j) =>
+      console.log("  row", j, typeof b, b)
+    );
+});
+console.log("================================");
+const order = await Order.create({
+  brand: user._id,
+  items: normalizedItems,
+  amount: payAmount,
+  paymentMethod: "wallet",
+  status: "PLACED",
+  isSeenByAdmin: false
+});
 
     /* ================= SEND ORDER NOTIFICATION EMAILS ================= */
     try {
@@ -263,9 +318,13 @@ router.post("/pay", authMiddleware, async (req, res) => {
     });
 
   } catch (err) {
-    console.error("❌ Wallet pay error:", err);
-    res.status(500).json({ message: "Wallet payment failed" });
-  }
+  console.log("====== REAL ERROR START ======");
+  console.log(err);
+  console.log(err.message);
+  console.log(err.errors);
+  console.log("====== REAL ERROR END ======");
+  res.status(500).json({ message: err.message });
+}
 });
 
 // ----------------- Admin: Add Due Amount -----------------
