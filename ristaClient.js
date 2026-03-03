@@ -127,6 +127,11 @@ async getInventory(branchCode) {
 
     return all;
   } catch (err) {
+    console.error("Rista getInventory() error:", {
+      status: err?.response?.status,
+      data: err?.response?.data,
+      message: err?.message,
+    });
     return handleNotFound(err, []);
   }
 },

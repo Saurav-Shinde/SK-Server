@@ -4,6 +4,13 @@ import Consumer from "../models/consumer.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
+const ADMIN_ROLES = {
+  WALLET_MANAGER: "WALLET_MANAGER",
+  ORDER_MANAGER: "ORDER_MANAGER",
+  RECIPE_MANAGER: "RECIPE_MANAGER",
+  INGREDIENT_MANAGER: "INGREDIENT_MANAGER"
+};
+
 const createToken = (payload) => {
   return jwt.sign(payload, process.env.JWT_SECRET || "development-secret", {
     expiresIn: "7d"
@@ -120,6 +127,70 @@ export const signup = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+
+    if (!email || !password)
+      return res.status(400).json({ message: "Email and password required" });
+
+    const loginId = email.toLowerCase().trim();
+
+    /* =====================================================
+       ADMIN LOGIN (CHECK FIRST — NO DATABASE)
+    ===================================================== */
+
+    const adminConfigs = [
+      {
+        role: ADMIN_ROLES.WALLET_MANAGER,
+        username: process.env.ADMIN_WALLET_USERNAME,
+        password: process.env.ADMIN_WALLET_PASSWORD
+      },
+      {
+        role: ADMIN_ROLES.ORDER_MANAGER,
+        username: process.env.ADMIN_ORDER_USERNAME,
+        password: process.env.ADMIN_ORDER_PASSWORD
+      },
+      {
+        role: ADMIN_ROLES.RECIPE_MANAGER,
+        username: process.env.ADMIN_RECIPE_USERNAME,
+        password: process.env.ADMIN_RECIPE_PASSWORD
+      },
+      {
+        role: ADMIN_ROLES.INGREDIENT_MANAGER,
+        username: process.env.ADMIN_INGREDIENT_USERNAME,
+        password: process.env.ADMIN_INGREDIENT_PASSWORD
+      }
+    ];
+
+    const matchedAdmin = adminConfigs.find((admin) => {
+      if (!admin.username || !admin.password) return false;
+
+      const envUser = admin.username.toLowerCase().trim();
+      const envId = envUser.includes("@") ? envUser.split("@")[0] : envUser;
+
+      const input = loginId.toLowerCase().trim();
+
+      return (
+        (input === envUser || input === envId) &&
+        password === admin.password
+      );
+    });
+
+    if (matchedAdmin) {
+      const token = createToken({
+        role: matchedAdmin.role,
+        admin: true
+      });
+
+      return res.json({
+        userType: "admin",
+        token,
+        role: matchedAdmin.role
+      });
+    }
+
+    /* =====================================================
+       DATABASE USERS (NOW SAFE)
+    ===================================================== */
+
     const normalizedEmail = email.toLowerCase();
 
     /* ---------- CLIENT ---------- */
@@ -160,26 +231,8 @@ export const login = async (req, res) => {
       });
     }
 
-    /*-----------ADMIN-----------*/
-  // 🔒 ADMIN LOGIN (NO DB)
-  if (
-    email === process.env.ADMIN_USERNAME &&
-    password === process.env.ADMIN_PASSWORD
-  ) {
-    const token = jwt.sign(
-      { role: "admin" },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    return res.json({
-      userType: "admin",
-      token,
-      admin: { email }
-    });
-  }
-
     return res.status(401).json({ message: "Invalid email or password" });
+
   } catch (err) {
     console.error("Login error:", err);
     return res.status(500).json({ message: "Login failed" });

@@ -5,7 +5,7 @@ import User from "../models/user.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { sendWalletTransactionEmail } from "../utils/walletMailer.js";
 import { sendOrderNotificationEmails } from "../utils/orderMailer.js";
-import { requireAdmin } from "../middleware/requireAdmin.js";
+import { requireRole } from "../middleware/requireAdmin.js";
 import Order from "../models/order.js";
 
 const router = express.Router();
@@ -164,7 +164,7 @@ router.post("/verify", authMiddleware, async (req, res) => {
 router.post(
   "/admin/deduct",
   authMiddleware,
-  requireAdmin,
+  requireRole("WALLET_MANAGER"),
   async (req, res) => {
     const { userId, amount, reason } = req.body;
 
@@ -331,7 +331,7 @@ const order = await Order.create({
 router.post(
   "/admin/wallet/due",
   authMiddleware,
-  requireAdmin,
+  requireRole("WALLET_MANAGER"),
   async (req, res) => {
     try {
       const { userId, amount, reason } = req.body;

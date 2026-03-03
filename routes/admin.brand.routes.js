@@ -2,7 +2,7 @@ import express from "express";
 import User from "../models/user.js";
 import BrandServiceChecklist from "../models/brandServiceChecklist.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { requireAdmin } from "../middleware/requireAdmin.js";
+import { requireRole } from "../middleware/requireAdmin.js";
 import Order from "../models/order.js";
 import {
   getAllRecipes,
@@ -42,7 +42,12 @@ const MASTER_SERVICES = [
 router.get(
   "/brands",
   authMiddleware,
-  requireAdmin,
+  requireRole(
+    "WALLET_MANAGER",
+    "ORDER_MANAGER",
+    "RECIPE_MANAGER",
+    "INGREDIENT_MANAGER"
+  ),
   async (req, res) => {
     try {
       // 1️⃣ Get ALL brands safely
@@ -84,7 +89,7 @@ router.get(
 router.get(
   "/services/:brandId",
   authMiddleware,
-  requireAdmin,
+  requireRole("WALLET_MANAGER"),
   async (req, res) => {
     const { brandId } = req.params;
 
@@ -119,7 +124,7 @@ router.get(
 router.post(
   "/services/:brandId",
   authMiddleware,
-  requireAdmin,
+  requireRole("WALLET_MANAGER"),
   async (req, res) => {
     try {
       const { brandId } = req.params;
@@ -169,7 +174,7 @@ router.post(
 router.patch(
   "/services/:brandId",
   authMiddleware,
-  requireAdmin,
+  requireRole("WALLET_MANAGER"),
   async (req, res) => {
     const { brandId } = req.params;
     const { serviceName, completed } = req.body;
@@ -197,7 +202,7 @@ router.patch(
 router.delete(
   "/services/:brandId",
   authMiddleware,
-  requireAdmin,
+  requireRole("WALLET_MANAGER"),
   async (req, res) => {
     try {
       const { brandId } = req.params;
@@ -235,7 +240,7 @@ router.delete(
 router.get(
   "/orders/:brandId",
   authMiddleware,
-  requireAdmin,
+  requireRole("ORDER_MANAGER"),
   async (req, res) => {
     try {
       const { brandId } = req.params;
@@ -263,7 +268,7 @@ router.get(
 router.patch(
   "/orders/:orderId",
   authMiddleware,
-  requireAdmin,
+  requireRole("ORDER_MANAGER"),
   async (req, res) => {
     try {
       const { orderId } = req.params;
@@ -296,7 +301,7 @@ router.patch(
 router.delete(
   "/orders/:orderId",
   authMiddleware,
-  requireAdmin,
+  requireRole("ORDER_MANAGER"),
   async (req, res) => {
     try {
       const { orderId } = req.params;
@@ -323,26 +328,26 @@ router.delete(
 router.get(
   "/recipes",
   authMiddleware,
-  requireAdmin,
+  requireRole("RECIPE_MANAGER"),
   getAllRecipes
 );
 
 router.get(
   "/recipes/:recipeId/breakdown",
   authMiddleware,
-  requireAdmin,
+  requireRole("RECIPE_MANAGER"),
   getRecipeBreakdown
 );
 router.get(
   "/recipes/:recipeId",
   authMiddleware,
-  requireAdmin,
+  requireRole("RECIPE_MANAGER"),
   getMainRecipeById
 );
 router.put(
   "/recipes/:recipeId",
   authMiddleware,
-  requireAdmin,
+  requireRole("RECIPE_MANAGER"),
   updateMainRecipe
 );
 
@@ -350,19 +355,19 @@ router.put(
 router.get(
   "/subrecipes",
   authMiddleware,
-  requireAdmin,
+  requireRole("RECIPE_MANAGER"),
   getAdminSubRecipes
 );
 router.get(
   "/subrecipes/:id",
   authMiddleware,
-  requireAdmin,
+  requireRole("RECIPE_MANAGER"),
   getSubRecipeById
 );
 router.put(
   "/subrecipes/:id",
   authMiddleware,
-  requireAdmin,
+  requireRole("RECIPE_MANAGER"),
   updateSubRecipe
 );
 
@@ -370,13 +375,13 @@ router.put(
 router.get(
   "/ingredients",
   authMiddleware,
-  requireAdmin,
+  requireRole("INGREDIENT_MANAGER"),
   listAllIngredients
 );
 router.post(
   "/ingredients/bulk-update",
   authMiddleware,
-  requireAdmin,
+  requireRole("INGREDIENT_MANAGER"),
   bulkUpdateIngredientPrices
 );
 

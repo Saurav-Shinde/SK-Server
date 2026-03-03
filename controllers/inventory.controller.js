@@ -1,4 +1,4 @@
-import axios from "axios";
+import { ristaClient } from "../ristaClient.js";
 
 export const getInventoryItems = async (req, res) => {
   try {
@@ -9,21 +9,14 @@ export const getInventoryItems = async (req, res) => {
         message: "branchCode is required",
       });
     }
+ 
+    // IMPORTANT:
+    // Rista expects `x-api-token` to be a JWT signed with `RISTA_SECRET_KEY`.
+    // Use the shared ristaClient so we don't accidentally send the wrong token.
+    const items = await ristaClient.getInventory(branchCode);
 
-    const url = `${process.env.RISTA_BASE_URL}/inventory/store/items`;
-    console.log("Calling:", url);
-
-    const response = await axios.get(url, {
-      params: { branchCode },
-      headers: {
-        "x-api-key": process.env.RISTA_API_KEY,
-        "x-api-token": process.env.RISTA_ACCESS_TOKEN,
-        "Content-Type": "application/json",
-      },
-    });
-    
-    const filteredItems = response.data.data.map((item) => ({
-      skuCode: item.skuCode,              
+    const filteredItems = (items || []).map((item) => ({
+      skuCode: item.skuCode,
       branchCode: item.branchCode,
       name: item.name,
       categoryName: item.categoryName,
@@ -32,14 +25,14 @@ export const getInventoryItems = async (req, res) => {
       averageCost: item.averageCost,
     }));
 
-
     res.json({ data: filteredItems });
 
   } catch (error) {
-    console.error(
-      "Rista API Error:",
-      error?.response?.data || error.message
-    );
+    console.error("Rista inventory error:", {
+      message: error?.message,
+      status: error?.response?.status,
+      data: error?.response?.data,
+    });
 
     res.status(error?.response?.status || 500).json({
       message: "Failed to fetch inventory items",

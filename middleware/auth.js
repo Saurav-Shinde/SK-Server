@@ -2,6 +2,13 @@ import jwt from "jsonwebtoken";
 import Vendor from "../models/vendor.js";
 import User from "../models/user.js";
 
+const ADMIN_ROLES = new Set([
+  "WALLET_MANAGER",
+  "ORDER_MANAGER",
+  "RECIPE_MANAGER",
+  "INGREDIENT_MANAGER"
+]);
+
 export const authMiddleware = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -13,16 +20,15 @@ export const authMiddleware = async (req, res, next) => {
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // 🔐 ADMIN SHORT-CIRCUIT (NO DB)
-    if (decoded.role === "admin") {
-      req.user = { role: "admin" };
+    // 🔐 ADMIN (ROLE-BASED, NO DB LOOKUP)
+    if (decoded.role && ADMIN_ROLES.has(decoded.role)) {
+      req.user = { role: decoded.role };
       return next();
     }
-    
+
     let user;
 
-    // 🔑 YOUR TOKEN STRUCTURE
-    // decoded = { vendorId, role, iat, exp }
+    // decoded = { vendorId | userId | consumerId, role, iat, exp }
     if (decoded.role === "vendor") {
       user = await Vendor.findById(decoded.vendorId).lean();
     } else {
@@ -33,7 +39,6 @@ export const authMiddleware = async (req, res, next) => {
       return res.status(401).json({ message: "User not found" });
     }
 
-    // ✅ Attach FULL DB DOCUMENT
     req.user = user;
     req.user.role = decoded.role;
 
