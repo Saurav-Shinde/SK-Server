@@ -24,8 +24,15 @@ const normalizeCategory = (category) => {
 export const calculateFoodCost = async (req, res) => {
   const { recipeName, wastagePercent = 0, brandName: bodyBrandName } = req.body;
   // Admin can pass brandName in body to view a brand's recipe; otherwise use logged-in user's brand
+  const ADMIN_ROLES = new Set([
+    "WALLET_MANAGER",
+    "ORDER_MANAGER",
+    "RECIPE_MANAGER",
+    "INGREDIENT_MANAGER"
+  ]);
+
   const userBrandName =
-    req.user?.role === "admin" && bodyBrandName
+    req.user?.role && ADMIN_ROLES.has(req.user.role) && bodyBrandName
       ? bodyBrandName
       : req.user?.brandName;
   if (!userBrandName) {
@@ -42,6 +49,8 @@ export const calculateFoodCost = async (req, res) => {
   let foodCost = 0;
   let packagingCost = 0;
 
+  const subRecipeCache = new Map(); // key: recipeNameLower -> SubRecipe doc (lean)
+
   // 🔁 expand items recursively
   for (const item of mainRecipe.items) {
     await expandItem({
@@ -49,17 +58,18 @@ export const calculateFoodCost = async (req, res) => {
       multiplier: 1,
       level: 0,
       breakdown,
-      totals: { foodCost, packagingCost },
+      brandName: userBrandName,
+      subRecipeCache,
     });
   }
 
   // recalc totals from breakdown (safe)
   foodCost = breakdown
-    .filter(b => b.category === "Food")
+    .filter(b => b.category === "Food" && b.level === 0)
     .reduce((s, b) => s + b.cost, 0);
 
   packagingCost = breakdown
-    .filter(b => b.category === "Packaging")
+    .filter(b => b.category === "Packaging" && b.level === 0)
     .reduce((s, b) => s + b.cost, 0);
 
   // 12% added food cost
@@ -87,39 +97,70 @@ async function expandItem({
   multiplier,
   level,
   breakdown,
+  brandName,
+  subRecipeCache,
 }) {
-  const isSubrecipeChild = level > 0;
+  const category = normalizeCategory(item.category);
 
-  const baseCost = isSubrecipeChild
-    ? 0 // ❌ DO NOT ADD COST FOR SUBRECIPE CHILDREN
-    : calculateCost(item) * multiplier;
+  // For ingredients: use normal cost
+  if (item.type !== "SUBRECIPE") {
+    const cost = calculateCost(item) * multiplier;
+    breakdown.push({
+      item: item.refId,
+      type: item.type,
+      category,
+      qty: item.quantity,
+      uom: item.uom,
+      cost: round(cost),
+      level,
+    });
+    return;
+  }
+
+  // For subrecipes:
+  // - show the child ingredient costs for display
+  // - but totals must not double-count children; totals are calculated using only level === 0 rows
+  const explicitCost = calculateCost(item) * multiplier; // if main recipe stored a subrecipe cost explicitly
+
+  const sub = await resolveSubRecipe({
+    recipeName: item.refId,
+    brandName,
+    cache: subRecipeCache,
+  });
+
+  let computedCost = 0;
+  if (sub) {
+    computedCost = await sumSubRecipeCost({
+      items: sub.items,
+      brandName,
+      multiplier,
+      subRecipeCache,
+    });
+  }
+
+  const subCost = explicitCost > 0 ? explicitCost : computedCost;
 
   breakdown.push({
     item: item.refId,
     type: item.type,
-    category: normalizeCategory(item.category),
+    category,
     qty: item.quantity,
     uom: item.uom,
-    cost: round(baseCost),
+    cost: round(subCost),
     level,
   });
 
-  // 🔽 expand ONLY for display
-  if (item.type === "SUBRECIPE") {
-    const sub = await SubRecipe.findOne({
-      recipeName: item.refId,
+  // Expand children for display (with real costs)
+  if (!sub) return;
+  for (const child of sub.items) {
+    await expandItem({
+      item: child,
+      multiplier,
+      level: level + 1,
+      breakdown,
+      brandName,
+      subRecipeCache,
     });
-
-    if (!sub) return;
-
-    for (const child of sub.items) {
-      await expandItem({
-        item: child,
-        multiplier,
-        level: level + 1,
-        breakdown,
-      });
-    }
   }
 }
 
@@ -140,6 +181,42 @@ const calculateCost = ({ quantity, netPrice, uom }) => {
 
   return qty * price;
 };
+
+async function resolveSubRecipe({ recipeName, brandName, cache }) {
+  const key = String(recipeName || "").trim().toLowerCase();
+  if (!key) return null;
+  if (cache.has(key)) return cache.get(key);
+
+  const subs = await SubRecipe.find({ recipeName }).lean();
+  const match = subs.find((s) => brandsMatch(brandName, s.brand)) || subs[0] || null;
+  cache.set(key, match);
+  return match;
+}
+
+async function sumSubRecipeCost({ items, brandName, multiplier, subRecipeCache }) {
+  let sum = 0;
+  for (const it of items || []) {
+    if (it.type === "SUBRECIPE") {
+      const sub = await resolveSubRecipe({
+        recipeName: it.refId,
+        brandName,
+        cache: subRecipeCache,
+      });
+      if (!sub) continue;
+      const explicit = calculateCost(it) * multiplier;
+      const nested = await sumSubRecipeCost({
+        items: sub.items,
+        brandName,
+        multiplier,
+        subRecipeCache,
+      });
+      sum += explicit > 0 ? explicit : nested;
+    } else {
+      sum += calculateCost(it) * multiplier;
+    }
+  }
+  return sum;
+}
 
 /* ================= SUMMARY ================= */
 
@@ -175,6 +252,7 @@ async function calculateRecipe(recipeId) {
   if (!mainRecipe) return null;
 
   let breakdown = [];
+  const subRecipeCache = new Map();
 
   for (const item of mainRecipe.items) {
     await expandItem({
@@ -182,15 +260,17 @@ async function calculateRecipe(recipeId) {
       multiplier: 1,
       level: 0,
       breakdown,
+      brandName: mainRecipe.brand,
+      subRecipeCache,
     });
   }
 
   const foodCost = breakdown
-    .filter(b => b.category === "Food")
+    .filter(b => b.category === "Food" && b.level === 0)
     .reduce((s, b) => s + b.cost, 0);
 
   const packagingCost = breakdown
-    .filter(b => b.category === "Packaging")
+    .filter(b => b.category === "Packaging" && b.level === 0)
     .reduce((s, b) => s + b.cost, 0);
 
   const foodCostWithTax = foodCost * 1.12;
