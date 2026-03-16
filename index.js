@@ -12,6 +12,7 @@ import dashboardRoutes from './routes/dashboard.routes.js'
 import paymentRoutes from './routes/payment.routes.js'
 import adminBrandRoutes from './routes/admin.brand.routes.js'
 import ristaHealthRoutes from './routes/rista.health.routes.js'
+import ristaRoutes from "./routes/rista.routes.js";
 import analyticsRoutes from './routes/analytics.routes.js'
 import brandSettingsRoutes from "./routes/brand.settings.routes.js";
 import brandProfileRoutes from "./routes/brand.profile.routes.js";
@@ -21,12 +22,16 @@ import walletRoutes from "./routes/wallet.routes.js";
 import vendorEligibilityRoutes from"./routes/vendorEligibility.routes.js"
 import servicesRoutes from "./routes/services.routes.js"
 import inventoryRoutes from "./routes/inventory.routes.js";
+import minimumPackageRoutes from "./routes/minimumPackage.routes.js";
+import mappedIngredientsRoutes from "./routes/mappedIngredients.routes.js";
 import mainRecipeRoutes from "./routes/mainrecipe.routes.js";
 import subRecipeRoutes from "./routes/subrecipe.routes.js";
 import costingsRoutes from "./routes/costing.routes.js";
 import orderRoutes from "./routes/order.routes.js";
 import googleRoutes from "./routes/google.routes.js";
 import { validateEnv } from "./utils/envValidator.js";
+import trialTrainingRecipeRoutes from "./routes/trialTrainingRecipes.routes.js";
+import ingredientIndentRoutes from "./routes/ingredientIndent.routes.js";
 
 dotenv.config()
 validateEnv();
@@ -97,6 +102,7 @@ app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/payment', paymentRoutes)
 app.use('/api/admin', adminBrandRoutes)
 app.use('/api/rista', ristaHealthRoutes)
+app.use("/api/rista", ristaRoutes);
 app.use('/api/analytics', analyticsRoutes)
 app.use("/api/brand", brandSettingsRoutes);
 app.use("/api/brand", brandProfileRoutes);
@@ -106,10 +112,14 @@ app.use("/api/wallet", walletRoutes);
 app.use("/api/vendor-eligibility", vendorEligibilityRoutes);
 app.use("/api/services", servicesRoutes);
 app.use("/api/inventory", inventoryRoutes);
+app.use("/api/minimumpackage", minimumPackageRoutes);
+app.use("/api/mapped-ingredients", mappedIngredientsRoutes);
 app.use("/api/mainrecipes", mainRecipeRoutes);
 app.use("/api/subrecipes", subRecipeRoutes);
 app.use("/api/costing", costingsRoutes);
 app.use("/api", orderRoutes);
+app.use("/api", trialTrainingRecipeRoutes);
+app.use("/api/ingredient-indent", ingredientIndentRoutes);
 app.use("/api/google", googleRoutes);
 
 app.get("/debug/db", async (req, res) => {

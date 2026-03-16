@@ -7,6 +7,9 @@ import { sendWalletTransactionEmail } from "../utils/walletMailer.js";
 import { sendOrderNotificationEmails } from "../utils/orderMailer.js";
 import { requireRole } from "../middleware/requireAdmin.js";
 import Order from "../models/order.js";
+import KitchenInventory from "../models/kitchenInventory.js";
+import ItemMaster from "../models/itemMaster.js";
+import MinimumPackage from "../models/minimumPackage.js";
 
 const router = express.Router();
 
@@ -300,6 +303,135 @@ const order = await Order.create({
   isSeenByAdmin: false
 });
 
+    /* ================= INVENTORY PROCUREMENT ================= */
+    try {
+      // 1️⃣ Aggregate required quantity per ingredient name (across all dishes)
+      const requiredByName = new Map(); // key: itemNameLower -> { displayName, uom, requiredQty }
+
+      for (const line of normalizedItems) {
+        for (const row of line.breakdown || []) {
+          if (!row.item || row.type !== "INGREDIENT") continue;
+          const key = String(row.item).trim().toLowerCase();
+          if (!key) continue;
+
+          const entry = requiredByName.get(key) || {
+            displayName: row.item,
+            uom: row.uom,
+            requiredQty: 0
+          };
+
+          entry.requiredQty += Number(row.qty || 0);
+          requiredByName.set(key, entry);
+        }
+      }
+
+      if (requiredByName.size) {
+        // 2️⃣ Resolve ItemMaster docs by itemName
+        const names = [...requiredByName.values()].map(e => e.displayName);
+        const itemDocs = await ItemMaster.find({
+          itemName: {
+            $in: names.map(n => new RegExp(`^${escapeRegex(n)}$`, "i"))
+          }
+        }).lean();
+
+        const byItemId = new Map(); // itemId -> { nameKey, itemDoc }
+        const byNameKey = new Map(); // nameKey -> itemDoc
+
+        itemDocs.forEach(doc => {
+          const key = String(doc.itemName || "").trim().toLowerCase();
+          if (!key) return;
+          byNameKey.set(key, doc);
+          byItemId.set(String(doc._id), { nameKey: key, itemDoc: doc });
+        });
+
+        // 3️⃣ Load existing KitchenInventory for this client
+        const itemIds = [...byItemId.keys()];
+        const invDocs = itemIds.length
+          ? await KitchenInventory.find({
+              clientId: user._id,
+              ingredientId: { $in: itemIds }
+            }).lean()
+          : [];
+
+        const invByItemId = new Map(); // itemId -> availableQty
+        invDocs.forEach(doc => {
+          invByItemId.set(String(doc.ingredientId), Number(doc.availableQty || 0));
+        });
+
+        // 4️⃣ Load MinimumPackage records for all items
+        const minPkgDocs = names.length
+          ? await MinimumPackage.find({
+              itemName: {
+                $in: names.map(n => new RegExp(`^${escapeRegex(n)}$`, "i"))
+              }
+            })
+              .select("itemName minPackQty minPackCost")
+              .lean()
+          : [];
+
+        const minPkgByNameKey = new Map();
+        minPkgDocs.forEach(doc => {
+          const key = String(doc.itemName || "").trim().toLowerCase();
+          if (!key) return;
+          minPkgByNameKey.set(key, {
+            minPackQty: Number(doc.minPackQty || 0),
+            minPackCost: Number(doc.minPackCost || 0)
+          });
+        });
+
+        // 5️⃣ Apply procurement algorithm and upsert KitchenInventory
+        for (const [nameKey, agg] of requiredByName.entries()) {
+          const itemDoc = byNameKey.get(nameKey);
+          if (!itemDoc) continue;
+
+          const itemId = String(itemDoc._id);
+          const requiredQty = Number(agg.requiredQty || 0);
+          if (!requiredQty) continue;
+
+          const invQty = Number(invByItemId.get(itemId) || 0);
+          const pkg = minPkgByNameKey.get(nameKey) || {};
+          const minPackQty = Number(pkg.minPackQty || 0) || 1; // fallback 1 to avoid /0
+
+          // stockUsed = min(requiredQty, inventoryQty)
+          const stockUsed = Math.min(requiredQty, invQty);
+          const netRequired = requiredQty - stockUsed;
+
+          // packets = ceil(netRequired / minPackQty)
+          const packets =
+            netRequired <= 0 ? 0 : Math.ceil(netRequired / minPackQty);
+
+          // procureQty = packets * minPackQty
+          const procureQty = packets * minPackQty;
+
+          // remainingInventory = inventoryQty + procureQty - requiredQty
+          const remainingInventory = invQty + procureQty - requiredQty;
+
+          // Upsert KitchenInventory
+          const existing = invDocs.find(
+            d =>
+              String(d.clientId) === String(user._id) &&
+              String(d.ingredientId) === itemId
+          );
+
+          if (existing) {
+            await KitchenInventory.updateOne(
+              { _id: existing._id },
+              { $set: { availableQty: remainingInventory } }
+            );
+          } else {
+            await KitchenInventory.create({
+              clientId: user._id,
+              ingredientId: itemId,
+              availableQty: remainingInventory
+            });
+          }
+        }
+      }
+    } catch (invErr) {
+      console.error("Inventory update after pay failed:", invErr);
+      // do not fail payment response; just log the error
+    }
+
     /* ================= SEND ORDER NOTIFICATION EMAILS ================= */
     try {
       await sendOrderNotificationEmails({
@@ -324,6 +456,10 @@ const order = await Order.create({
   console.log(err.errors);
   console.log("====== REAL ERROR END ======");
   res.status(500).json({ message: err.message });
+}
+
+function escapeRegex(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 });
 

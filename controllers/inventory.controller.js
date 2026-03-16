@@ -1,4 +1,6 @@
 import { ristaClient } from "../ristaClient.js";
+import KitchenInventory from "../models/kitchenInventory.js";
+import ItemMaster from "../models/itemMaster.js";
 
 export const getInventoryItems = async (req, res) => {
   try {
@@ -40,3 +42,49 @@ export const getInventoryItems = async (req, res) => {
     });
   }
 };
+
+export const getClientInventory = async (req, res) => {
+  try {
+    const { clientId } = req.params;
+    const authedId = req.user?._id?.toString();
+
+    if (!authedId || authedId !== clientId) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    // get client inventory
+    const inventoryRows = await KitchenInventory.find({ clientId }).lean();
+
+    const inventoryMap = {};
+    inventoryRows.forEach(row => {
+      inventoryMap[row.ingredientId.toString()] = Number(row.availableQty || 0);
+    });
+
+    // get all ingredients from itemmaster
+    const items = await ItemMaster.find(
+      {},
+      "itemName uom minPackQty minPackCost netPrice"
+    ).lean();
+
+    const result = items.map(item => ({
+      ingredientId: item._id,
+      itemName: item.itemName,
+      uom: item.uom,
+      availableQty: inventoryMap[item._id.toString()] || 0,
+      minPackQty: item.minPackQty ?? 1,
+      minPackCost: item.minPackCost ?? 0,
+      netPrice: item.netPrice ?? 0
+    }));
+
+    res.json({ items: result });
+
+  } catch (error) {
+    console.error("Client inventory error:", error);
+
+    res.status(500).json({
+      message: "Failed to fetch client inventory",
+      error: error.message,
+    });
+  }
+};
+

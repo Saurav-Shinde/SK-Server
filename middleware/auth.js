@@ -4,7 +4,6 @@ import User from "../models/user.js";
 
 const ADMIN_ROLES = new Set([
   "WALLET_MANAGER",
-  "ORDER_MANAGER",
   "RECIPE_MANAGER",
   "INGREDIENT_MANAGER"
 ]);

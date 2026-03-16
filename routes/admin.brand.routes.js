@@ -44,7 +44,6 @@ router.get(
   authMiddleware,
   requireRole(
     "WALLET_MANAGER",
-    "ORDER_MANAGER",
     "RECIPE_MANAGER",
     "INGREDIENT_MANAGER"
   ),
@@ -240,7 +239,7 @@ router.delete(
 router.get(
   "/orders/:brandId",
   authMiddleware,
-  requireRole("ORDER_MANAGER"),
+  requireRole("RECIPE_MANAGER"),
   async (req, res) => {
     try {
       const { brandId } = req.params;
@@ -268,7 +267,7 @@ router.get(
 router.patch(
   "/orders/:orderId",
   authMiddleware,
-  requireRole("ORDER_MANAGER"),
+  requireRole("RECIPE_MANAGER"),
   async (req, res) => {
     try {
       const { orderId } = req.params;
@@ -301,7 +300,7 @@ router.patch(
 router.delete(
   "/orders/:orderId",
   authMiddleware,
-  requireRole("ORDER_MANAGER"),
+  requireRole("RECIPE_MANAGER"),
   async (req, res) => {
     try {
       const { orderId } = req.params;

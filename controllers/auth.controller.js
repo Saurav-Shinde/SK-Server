@@ -6,7 +6,6 @@ import jwt from "jsonwebtoken";
 
 const ADMIN_ROLES = {
   WALLET_MANAGER: "WALLET_MANAGER",
-  ORDER_MANAGER: "ORDER_MANAGER",
   RECIPE_MANAGER: "RECIPE_MANAGER",
   INGREDIENT_MANAGER: "INGREDIENT_MANAGER"
 };
@@ -142,11 +141,6 @@ export const login = async (req, res) => {
         role: ADMIN_ROLES.WALLET_MANAGER,
         username: process.env.ADMIN_WALLET_USERNAME,
         password: process.env.ADMIN_WALLET_PASSWORD
-      },
-      {
-        role: ADMIN_ROLES.ORDER_MANAGER,
-        username: process.env.ADMIN_ORDER_USERNAME,
-        password: process.env.ADMIN_ORDER_PASSWORD
       },
       {
         role: ADMIN_ROLES.RECIPE_MANAGER,
