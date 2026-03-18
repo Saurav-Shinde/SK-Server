@@ -32,6 +32,8 @@ import googleRoutes from "./routes/google.routes.js";
 import { validateEnv } from "./utils/envValidator.js";
 import trialTrainingRecipeRoutes from "./routes/trialTrainingRecipes.routes.js";
 import ingredientIndentRoutes from "./routes/ingredientIndent.routes.js";
+import recipeHierarchyRoutes from "./routes/recipeHierarchy.routes.js";
+import creditNoteRoutes from "./routes/creditNote.routes.js";
 
 dotenv.config()
 validateEnv();
@@ -120,6 +122,8 @@ app.use("/api/costing", costingsRoutes);
 app.use("/api", orderRoutes);
 app.use("/api", trialTrainingRecipeRoutes);
 app.use("/api/ingredient-indent", ingredientIndentRoutes);
+app.use("/api", recipeHierarchyRoutes);
+app.use("/api/credit-notes", creditNoteRoutes);
 app.use("/api/google", googleRoutes);
 
 app.get("/debug/db", async (req, res) => {

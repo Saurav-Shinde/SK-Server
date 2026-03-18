@@ -24,7 +24,7 @@ export const createTrialRecipe = async (req, res) => {
 
 export const createTrainingRecipe = async (req, res) => {
   try {
-    const { brand, trainingCode, recipeName, items } = req.body || {};
+    const { brand, trainingCode, recipeName, items, sopLink } = req.body || {};
     if (!brand || !trainingCode || !recipeName || !Array.isArray(items)) {
       return res.status(400).json({ message: "Invalid training recipe payload" });
     }
@@ -33,6 +33,7 @@ export const createTrainingRecipe = async (req, res) => {
       brand,
       trainingCode,
       recipeName,
+      sopLink: typeof sopLink === "string" ? sopLink.trim() : "",
       items,
     });
 
@@ -120,15 +121,14 @@ export const getTrainingRecipeById = async (req, res) => {
 export const updateTrainingRecipe = async (req, res) => {
   try {
     const { id } = req.params;
-    const { items } = req.body || {};
-    if (!Array.isArray(items)) {
-      return res.status(400).json({ message: "items[] is required" });
+    const { items, sopLink } = req.body || {};
+    const patch = {};
+    if (Array.isArray(items)) patch.items = items;
+    if (typeof sopLink === "string") patch.sopLink = sopLink.trim();
+    if (Object.keys(patch).length === 0) {
+      return res.status(400).json({ message: "Nothing to update" });
     }
-    const doc = await TrainingRecipe.findByIdAndUpdate(
-      id,
-      { $set: { items } },
-      { new: true }
-    ).lean();
+    const doc = await TrainingRecipe.findByIdAndUpdate(id, { $set: patch }, { new: true }).lean();
     if (!doc) {
       return res.status(404).json({ message: "Training recipe not found" });
     }
@@ -136,6 +136,34 @@ export const updateTrainingRecipe = async (req, res) => {
   } catch (err) {
     console.error("Update training recipe error:", err?.message || err);
     return res.status(500).json({ message: "Failed to update training recipe" });
+  }
+};
+
+export const deleteTrialRecipe = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await TrialRecipe.findByIdAndDelete(id).lean();
+    if (!deleted) {
+      return res.status(404).json({ message: "Trial recipe not found" });
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Delete trial recipe error:", err?.message || err);
+    return res.status(500).json({ message: "Failed to delete trial recipe" });
+  }
+};
+
+export const deleteTrainingRecipe = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await TrainingRecipe.findByIdAndDelete(id).lean();
+    if (!deleted) {
+      return res.status(404).json({ message: "Training recipe not found" });
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Delete training recipe error:", err?.message || err);
+    return res.status(500).json({ message: "Failed to delete training recipe" });
   }
 };
 

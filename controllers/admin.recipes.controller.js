@@ -114,7 +114,7 @@ export const getMainRecipeById = async (req, res) => {
 export const updateMainRecipe = async (req, res) => {
   try {
     const { recipeId } = req.params;
-    const { items, recipeName, brand } = req.body;
+    const { items, recipeName, brand, sopLink } = req.body;
     const mainRecipe = await MainRecipe.findById(recipeId);
     if (!mainRecipe) {
       return res.status(404).json({ message: "Recipe not found" });
@@ -127,6 +127,9 @@ export const updateMainRecipe = async (req, res) => {
     }
     if (typeof brand === "string" && brand.trim()) {
       mainRecipe.brand = brand.trim();
+    }
+    if (typeof sopLink === "string") {
+      mainRecipe.sopLink = sopLink.trim();
     }
     await mainRecipe.save();
     res.json({ success: true, recipe: mainRecipe });

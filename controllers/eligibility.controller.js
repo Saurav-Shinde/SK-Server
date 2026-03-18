@@ -1,10 +1,6 @@
 import stream from "stream";
 import EligibilitySubmission from "../models/eligibility.js";
-import { scoreEligibility } from "../utils/scoreEligibility.js";
-import { generateAnalysisSummary } from "../utils/geminiService.js";
 import { sendEligibilityEmails } from "../utils/emailService.js";
-import Brand from "../models/brand.js";
-import User from "../models/user.js";
 import cloudinary from "../config/cloudinary.js";
 
 function toArray(value) {
@@ -27,7 +23,7 @@ export const submitEligibility = async (req, res) => {
     let attachmentLinks = [];
 
     // ---------- FILE UPLOAD ----------
-    if (req.files?.length) {
+    if (req.file) {
       const uploadToCloudinary = (fileBuffer, filename) =>
         new Promise((resolve, reject) => {
           const pass = new stream.PassThrough();
@@ -48,10 +44,8 @@ export const submitEligibility = async (req, res) => {
           pass.pipe(cloudStream);
         });
 
-      for (const f of req.files) {
-        const uploaded = await uploadToCloudinary(f.buffer, f.originalname);
-        attachmentLinks.push(uploaded.secure_url);
-      }
+      const uploaded = await uploadToCloudinary(req.file.buffer, req.file.originalname);
+      attachmentLinks.push(uploaded.secure_url);
     }
 
     // ---------- MERGE PAYLOAD ----------
@@ -60,59 +54,68 @@ export const submitEligibility = async (req, res) => {
       attachments: attachmentLinks,
     };
 
-    // ---------- NORMALIZE ARRAYS ----------
-    payload.activationOpportunities = toArray(payload.activationOpportunities);
-    payload.domesticOpportunities = toArray(payload.domesticOpportunities);
-    payload.menuSupplyChainComplexity = toArray(payload.menuSupplyChainComplexity);
+    // ---------- NORMALIZE ARRAYS (v2) ----------
+    payload.menuList = toArray(payload.menuList);
+    payload.equipmentsList = toArray(payload.equipmentsList);
+    payload.smallwareList = toArray(payload.smallwareList);
 
-    // ---------- CONVERT NUMBERS ----------
-    payload.deliveryAOV = Number(payload.deliveryAOV || 0);
-    payload.numberOfMenuItems = Number(payload.numberOfMenuItems || 0);
+    // ---------- CONVERT NUMBERS (v2) ----------
+    payload.averageOrderValue = Number(payload.averageOrderValue || 0);
+    payload.ordersPerDay = Number(payload.ordersPerDay || 0);
 
     // ---------- CLEAN STRINGS ----------
     payload.brandName = payload.brandName?.trim();
     payload.submittedByEmail = payload.submittedByEmail?.toLowerCase().trim() || null;
+    payload.operationalHours = String(payload.operationalHours || "").trim();
+
+    // staffRequired can come as JSON string
+    if (typeof payload.staffRequired === "string") {
+      try {
+        payload.staffRequired = JSON.parse(payload.staffRequired);
+      } catch (_) {
+        payload.staffRequired = payload.staffRequired;
+      }
+    }
 
     // ---------- VALIDATION ----------
     const requiredFields = [
       "brandName",
-      "locationMapping",
-      "brandStrength",
-      "socialMediaEngagement",
-      "bmDeliverySales",
-      "deliveryAOV",
-      "cogsAnalysis",
-      "dspRateType",
-      "wastageRisk",
-      "numberOfMenuItems",
-      "packagingType",
-      "activationOpportunities",
-      "domesticOpportunities",
-      "dspMarketingCommitment",
-      "howDidYouHear",
+      "menuList",
+      "equipmentsList",
+      "smallwareList",
+      "averageOrderValue",
+      "ordersPerDay",
+      "staffRequired",
+      "operationalHours",
     ];
 
     for (const field of requiredFields) {
-      if (!payload[field] || payload[field].length === 0) {
+      const v = payload[field];
+      const isEmptyArray = Array.isArray(v) && v.length === 0;
+      const isEmptyString = typeof v === "string" && !v.trim();
+      const isEmptyNumber =
+        (field === "averageOrderValue" || field === "ordersPerDay") &&
+        (!Number.isFinite(Number(v)) || Number(v) <= 0);
+
+      if (v == null || isEmptyArray || isEmptyString || isEmptyNumber) {
         return res.status(400).json({
           message: `Field "${field}" is required`,
         });
       }
     }
 
-    // ---------- SCORE ----------
-    const scoreResult = scoreEligibility(payload);
-    const rawScore = scoreResult.total_score_0_to_10 || 0;
-
+    // ---------- LIGHTWEIGHT SCORING (v2) ----------
+    const rawScore = 0;
+    const scoreResult = {
+      total_score_0_to_10: rawScore,
+      meets_threshold: false,
+      decision: "NEEDS_REVIEW",
+      section_scores: {},
+      brand_name: payload.brandName,
+    };
     payload.totalScore = rawScore;
-    payload.eligibilityPassed = rawScore >= 5.5;
-
-    // ---------- AI SUMMARY ----------
-    try {
-      payload.aiAnalysisSummary = await generateAnalysisSummary(payload, scoreResult);
-    } catch {
-      payload.aiAnalysisSummary = `Score: ${rawScore}/10`;
-    }
+    payload.eligibilityPassed = false;
+    payload.aiAnalysisSummary = "Submitted for review.";
 
     // ---------- SAVE ----------
     const submission = await EligibilitySubmission.create(payload);
@@ -128,6 +131,10 @@ export const submitEligibility = async (req, res) => {
       message: "Submitted",
       submissionId: submission._id,
       score: rawScore,
+      decision: scoreResult.decision,
+      meetsThreshold: scoreResult.meets_threshold,
+      sectionScores: scoreResult.section_scores,
+      aiAnalysisSummary: payload.aiAnalysisSummary,
       attachments: attachmentLinks,
     });
 

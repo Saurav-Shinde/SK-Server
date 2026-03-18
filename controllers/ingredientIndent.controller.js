@@ -2,17 +2,22 @@ import IngredientIndent from "../models/ingredientIndent.js";
 
 export const createIndent = async (req, res) => {
   try {
-    const { recipeId, recipeKind, recipeName, branchCode, items } = req.body || {};
+    const { recipeId, recipeKind, recipeName, branchCode, items, requestBrandName } = req.body || {};
 
     if (!recipeId || !recipeKind || !branchCode || !Array.isArray(items)) {
       return res.status(400).json({ message: "recipeId, recipeKind, branchCode, items[] are required" });
     }
-    if (!["main", "sub"].includes(recipeKind)) {
-      return res.status(400).json({ message: "recipeKind must be main or sub" });
+    const reqBrand = String(requestBrandName || "").trim();
+    if (!reqBrand) {
+      return res.status(400).json({ message: "requestBrandName is required" });
+    }
+    if (!["main", "sub", "trial", "training"].includes(recipeKind)) {
+      return res.status(400).json({ message: "recipeKind must be main, sub, trial or training" });
     }
 
     const docs = items
       .map((r) => ({
+        requestBrandName: reqBrand,
         recipeId,
         recipeKind,
         recipeName: String(recipeName || ""),
@@ -22,7 +27,9 @@ export const createIndent = async (req, res) => {
         categoryName: String(r.categoryName || ""),
         uom: String(r.uom || ""),
         qty: Number(r.qty || 0),
-        cost: Number(r.cost || 0),
+        ingredientBrand: "",
+        // cost captured later during verification
+        cost: 0,
         status: "INDENT_PENDING",
       }))
       .filter((d) => d.itemName);
@@ -56,6 +63,7 @@ export const listIndent = async (req, res) => {
 export const verifyIndentItem = async (req, res) => {
   try {
     const { id } = req.params;
+    const { cost, ingredientBrand } = req.body || {};
     const doc = await IngredientIndent.findById(id);
     if (!doc) return res.status(404).json({ message: "Indent item not found" });
 
@@ -63,6 +71,17 @@ export const verifyIndentItem = async (req, res) => {
       return res.status(400).json({ message: "Already issued" });
     }
 
+    const c = Number(cost);
+    if (!Number.isFinite(c) || c < 0) {
+      return res.status(400).json({ message: "Valid cost is required" });
+    }
+    const ingBrand = String(ingredientBrand || "").trim();
+    if (!ingBrand) {
+      return res.status(400).json({ message: "ingredientBrand is required" });
+    }
+
+    doc.cost = c;
+    doc.ingredientBrand = ingBrand;
     doc.status = "INDENT_VERIFIED";
     doc.verifiedAt = new Date();
     await doc.save();
@@ -92,6 +111,20 @@ export const issueIndentItem = async (req, res) => {
   } catch (err) {
     console.error("Issue indent error:", err?.message || err);
     return res.status(500).json({ message: "Failed to issue indent item" });
+  }
+};
+
+export const deleteIndentItem = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = await IngredientIndent.findByIdAndDelete(id);
+    if (!deleted) {
+      return res.status(404).json({ message: "Indent item not found" });
+    }
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Delete indent error:", err?.message || err);
+    return res.status(500).json({ message: "Failed to delete indent item" });
   }
 };
 

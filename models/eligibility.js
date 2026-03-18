@@ -6,53 +6,62 @@ const eligibilitySchema = new mongoose.Schema(
     submittedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     submittedByEmail: { type: String, default: null },
 
-    // Mapping
+    // Mapping (simplified v2)
     brandName: { type: String, required: true },
-    locationMapping: { type: String, required: true },
-    brandStrength: { type: String, required: true },
-    socialMediaEngagement: { type: String, required: true },
+    menuList: { type: [String], default: [] },
+    equipmentsList: { type: [String], default: [] },
+    smallwareList: { type: [String], default: [] },
+    averageOrderValue: { type: Number, default: 0 },
+    ordersPerDay: { type: Number, default: 0 },
+    staffRequired: { type: mongoose.Schema.Types.Mixed, default: null }, // shift-wise breakdown
+    operationalHours: { type: String, default: "" },
+
+    // Legacy fields (kept for backward compatibility; no longer required)
+    locationMapping: { type: String, default: "" },
+    brandStrength: { type: String, default: "" },
+    socialMediaEngagement: { type: String, default: "" },
     ristaOutletId: { type: String, default: null },
 
     swiggyRating: { type: Number, default: null },
     zomatoRating: { type: Number, default: null },
     dspRatings: { type: String, default: null },
 
-    // Operating
-    bmDeliverySales: { type: String, required: true },
-    deliveryAOV: { type: Number, required: true },
-    cogsAnalysis: { type: String, required: true },
+    // Operating (legacy)
+    bmDeliverySales: { type: String, default: "" },
+    deliveryAOV: { type: Number, default: 0 },
+    cogsAnalysis: { type: String, default: "" },
 
-    dspRateType: { type: String, required: true },
+    dspRateType: { type: String, default: "" },
     dspRatePercent: { type: String, default: null },
 
-    wastageRisk: { type: String, required: true },
+    wastageRisk: { type: String, default: "" },
 
-    numberOfMenuItems: { type: Number, required: true },
-    packagingType: { type: String, required: true },
+    numberOfMenuItems: { type: Number, default: 0 },
+    packagingType: { type: String, default: "" },
 
-    menuSupplyChainComplexity: { type: [String], required: true },
+    menuSupplyChainComplexity: { type: [String], default: [] },
 
-    launchCapex: { type: String, required: true },
+    launchCapex: { type: String, default: "" },
     launchCapexPieces: { type: String, default: null },
 
     smallwaresNeeded: { type: String, default: null },
-    smallwaresCost: { type: String, required: true },
+    smallwaresCost: { type: String, default: "" },
 
     // Expansion
-    activationOpportunities: { type: [String], required: true },
-    domesticOpportunities: { type: [String], required: true },
-    dspMarketingCommitment: { type: String, required: true },
+    activationOpportunities: { type: [String], default: [] },
+    domesticOpportunities: { type: [String], default: [] },
+    dspMarketingCommitment: { type: String, default: "" },
 
     // Special Conditions
-    retrofittingNeeded: { type: String, required: true },
-    additionalSpaceRequired: { type: String, required: true },
-    procurementSuppliers: { type: String, required: true },
-    multipleDeliveries: { type: String, required: true },
-    additionalTrainingTravel: { type: String, required: true },
-    launchTravelCosts: { type: String, required: true },
-    specialReportingIntegrations: { type: String, required: true },
-    equipmentAvailability: { type: String, required: true },
-    howDidYouHear: { type: String, required: true },
+    retrofittingNeeded: { type: String, default: "" },
+    additionalSpaceRequired: { type: String, default: "" },
+    procurementSuppliers: { type: String, default: "" },
+    multipleDeliveries: { type: String, default: "" },
+    additionalTrainingTravel: { type: String, default: "" },
+    launchTravelCosts: { type: String, default: "" },
+    specialReportingIntegrations: { type: String, default: "" },
+    equipmentAvailability: { type: String, default: "" },
+    howDidYouHear: { type: String, default: "" },
 
     // ✅ NEW — Cloudinary Excel uploads
     attachments: [

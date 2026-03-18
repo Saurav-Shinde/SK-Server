@@ -7,6 +7,7 @@ const mappedItemSchema = new mongoose.Schema(
     categoryName: { type: String, default: "" },
     uom: { type: String, default: "" },
     qty: { type: Number, default: 0 },
+    // Cost is captured by Ingredient Admin during verification
     cost: { type: Number, default: 0 },
   },
   { _id: false }
@@ -21,7 +22,7 @@ const mappedIngredientSchema = new mongoose.Schema(
     },
     recipeKind: {
       type: String,
-      enum: ["main", "sub"],
+      enum: ["main", "sub", "trial", "training"],
       required: true,
     },
     branchCode: { type: String, required: true, trim: true },

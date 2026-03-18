@@ -7,8 +7,8 @@ export const upsertMappedIngredients = async (req, res) => {
     if (!recipeId || !recipeKind || !branchCode) {
       return res.status(400).json({ message: "recipeId, recipeKind, branchCode are required" });
     }
-    if (!["main", "sub"].includes(recipeKind)) {
-      return res.status(400).json({ message: "recipeKind must be main or sub" });
+    if (!["main", "sub", "trial", "training"].includes(recipeKind)) {
+      return res.status(400).json({ message: "recipeKind must be main, sub, trial or training" });
     }
 
     const safeItems = Array.isArray(items)
@@ -18,7 +18,7 @@ export const upsertMappedIngredients = async (req, res) => {
           categoryName: String(r.categoryName || ""),
           uom: String(r.uom || ""),
           qty: Number(r.qty || 0),
-          cost: Number(r.cost || 0),
+          cost: 0,
         })).filter((r) => r.itemName)
       : [];
 

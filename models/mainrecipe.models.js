@@ -24,6 +24,7 @@ const mainRecipeSchema = new mongoose.Schema(
   {
     brand: { type: String, required: true },
     recipeName: { type: String, required: true },
+    sopLink: { type: String, default: "" },
     items: [itemSchema],
   },
   { timestamps: true }

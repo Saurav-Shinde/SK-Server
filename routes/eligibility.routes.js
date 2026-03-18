@@ -8,7 +8,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 router.post(
   "/",
-  upload.array("attachments"),
+  upload.single("document"),
   submitEligibility
 );
 

@@ -56,7 +56,7 @@ export const getRecipeByName = async (req, res) => {
 
 export const createMainRecipe = async (req, res) => {
   try {
-    const { brand, recipeName, items } = req.body;
+    const { brand, recipeName, items, sopLink } = req.body;
 
     if (!brand || !recipeName || !Array.isArray(items)) {
       return res.status(400).json({
@@ -67,6 +67,7 @@ export const createMainRecipe = async (req, res) => {
     const recipe = await MainRecipe.create({
       brand,
       recipeName,
+      sopLink: typeof sopLink === "string" ? sopLink.trim() : "",
       items,
     });
 

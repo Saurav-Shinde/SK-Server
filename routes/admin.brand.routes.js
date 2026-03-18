@@ -83,6 +83,28 @@ router.get(
   }
 );
 
+/* ================= BRAND NAMES (for dropdowns) ================= */
+router.get(
+  "/brand-names",
+  authMiddleware,
+  requireRole("RECIPE_MANAGER"),
+  async (req, res) => {
+    try {
+      const names = await User.distinct("brandName", {
+        brandName: { $exists: true, $ne: "" },
+      });
+      const list = (names || [])
+        .map((n) => String(n).trim())
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b));
+      return res.json({ success: true, data: list });
+    } catch (err) {
+      console.error("Failed to load brand names", err);
+      return res.status(500).json({ message: "Failed to load brand names" });
+    }
+  }
+);
+
 
 /* ================= GET SERVICES ================= */
 router.get(
