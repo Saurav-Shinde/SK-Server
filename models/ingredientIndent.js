@@ -4,6 +4,9 @@ const indentSchema = new mongoose.Schema(
   {
     // Brand name for the indent request (order/request brand context)
     requestBrandName: { type: String, default: "", trim: true, index: true },
+    // Client brand selected in indent request (from registered clients)
+    clientBrandId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null, index: true },
+    clientBrandName: { type: String, default: "", trim: true, index: true },
     recipeId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
     recipeKind: { type: String, enum: ["main", "sub", "trial", "training"], required: true },
     recipeName: { type: String, default: "" },
@@ -11,7 +14,7 @@ const indentSchema = new mongoose.Schema(
 
     skuCode: { type: String, default: "" },
     itemName: { type: String, required: true, trim: true, index: true },
-    // Ingredient brand entered by Ingredient Admin during verification
+    // Ingredient brand captured at indent stage (chef)
     ingredientBrand: { type: String, default: "", trim: true },
     categoryName: { type: String, default: "" },
     uom: { type: String, default: "" },
@@ -25,6 +28,8 @@ const indentSchema = new mongoose.Schema(
       default: "INDENT_PENDING",
       index: true,
     },
+    isSeenByIngredientAdmin: { type: Boolean, default: false, index: true },
+    isSeenByRecipeAdminGrn: { type: Boolean, default: false, index: true },
     verifiedAt: { type: Date, default: null },
     issuedAt: { type: Date, default: null },
   },

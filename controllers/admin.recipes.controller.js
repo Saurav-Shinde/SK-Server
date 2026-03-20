@@ -52,7 +52,13 @@ async function expandItem({ item, multiplier, level, breakdown, brand }) {
 
 export const getAllRecipes = async (req, res) => {
   try {
-    const recipes = await MainRecipe.find({})
+    const { brand } = req.query;
+
+    const query = brand
+      ? { brand: { $regex: brand, $options: "i" } }
+      : {};
+
+    const recipes = await MainRecipe.find(query)
       .select("recipeName brand")
       .sort({ brand: 1, recipeName: 1 })
       .lean();

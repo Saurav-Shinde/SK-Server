@@ -4,6 +4,8 @@ import BrandServiceChecklist from "../models/brandServiceChecklist.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { requireRole } from "../middleware/requireAdmin.js";
 import Order from "../models/order.js";
+import IngredientIndent from "../models/ingredientIndent.js";
+import MenuEntry from "../models/menuEntry.js";
 import {
   getAllRecipes,
   getRecipeBreakdown,
@@ -13,6 +15,7 @@ import {
   getSubRecipeById,
   updateSubRecipe,
 } from "../controllers/admin.recipes.controller.js";
+import { getRecipeIndentIngredients } from "../controllers/recipeIndentIngredients.controller.js";
 import {
   listAllIngredients,
   bulkUpdateIngredientPrices,
@@ -62,9 +65,17 @@ router.get(
         isSeenByAdmin: false
       }).select("brand");
 
+      // 2️⃣b Get unseen menu entries
+      const unseenMenus = await MenuEntry.find({
+        isSeenByRecipeAdmin: false
+      }).select("clientId");
+
       // 3️⃣ Build lookup set
       const brandIdsWithOrders = new Set(
         unseenOrders.map(o => o.brand.toString())
+      );
+      const brandIdsWithMenus = new Set(
+        unseenMenus.map(m => m.clientId.toString())
       );
 
       // 4️⃣ Attach hasNewOrder flag
@@ -72,7 +83,8 @@ router.get(
         ...brand,
         hasNewOrder: brandIdsWithOrders.has(
           brand._id.toString()
-        )
+        ),
+        hasNewMenu: brandIdsWithMenus.has(brand._id.toString()),
       }));
 
       res.json(result);
@@ -101,6 +113,29 @@ router.get(
     } catch (err) {
       console.error("Failed to load brand names", err);
       return res.status(500).json({ message: "Failed to load brand names" });
+    }
+  }
+);
+
+/* ================= CLIENT BRANDS (for indent request dropdown) ================= */
+router.get(
+  "/client-brands",
+  authMiddleware,
+  requireRole("RECIPE_MANAGER"),
+  async (req, res) => {
+    try {
+      const list = await User.find({ role: "client", brandName: { $exists: true, $ne: "" } })
+        .select("brandName")
+        .sort({ brandName: 1 })
+        .lean();
+      const data = (list || []).map((u) => ({
+        _id: u._id,
+        brandName: u.brandName,
+      }));
+      return res.json({ success: true, data });
+    } catch (err) {
+      console.error("Failed to load client brands", err);
+      return res.status(500).json({ message: "Failed to load client brands" });
     }
   }
 );
@@ -284,6 +319,38 @@ router.get(
   }
 );
 
+/* ================= ADMIN NOTIFICATION COUNTS ================= */
+router.get(
+  "/notification-counts",
+  authMiddleware,
+  requireRole("RECIPE_MANAGER", "INGREDIENT_MANAGER"),
+  async (req, res) => {
+    try {
+      const role = req.user?.role;
+      if (role === "RECIPE_MANAGER") {
+        const [orders, menu, grn] = await Promise.all([
+          Order.countDocuments({ isSeenByAdmin: false }),
+          MenuEntry.countDocuments({ isSeenByRecipeAdmin: false }),
+          IngredientIndent.countDocuments({ status: "ISSUED", isSeenByRecipeAdminGrn: false }),
+        ]);
+        return res.json({
+          success: true,
+          data: { orders, menu, grn },
+        });
+      }
+      // INGREDIENT_MANAGER
+      const indent = await IngredientIndent.countDocuments({
+        status: { $in: ["INDENT_PENDING", "INDENT_VERIFIED"] },
+        isSeenByIngredientAdmin: false,
+      });
+      return res.json({ success: true, data: { indent } });
+    } catch (err) {
+      console.error("Failed to load notification counts", err);
+      return res.status(500).json({ message: "Failed to load notification counts" });
+    }
+  }
+);
+
 
 /* ================= UPDATE ORDER STATUS ================= */
 router.patch(
@@ -359,6 +426,15 @@ router.get(
   requireRole("RECIPE_MANAGER"),
   getRecipeBreakdown
 );
+
+/* ================= ADMIN: INDENT INGREDIENT EXPANSION ================= */
+router.get(
+  "/recipe-ingredients/:recipeKind/:recipeId",
+  authMiddleware,
+  requireRole("RECIPE_MANAGER"),
+  getRecipeIndentIngredients
+);
+
 router.get(
   "/recipes/:recipeId",
   authMiddleware,
@@ -407,3 +483,4 @@ router.post(
 );
 
 export default router;
+

@@ -78,7 +78,8 @@ router.post("/verify", authMiddleware, async (req, res) => {
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature,
-      amount
+      amount,
+      applyGst = false
     } = req.body;
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
@@ -110,30 +111,51 @@ router.post("/verify", authMiddleware, async (req, res) => {
       user.wallet = { balance: 0, transactions: [] };
     }
 
-    const amt = Number(amount);
+    const enteredNet = Number(amount);
+    const gstRate = 0.18;
+    const paidTotal = applyGst ? enteredNet * (1 + gstRate) : enteredNet;
 
-    user.wallet.balance += amt;
+    user.wallet.balance += paidTotal;
     // ----------------- AUTO CLEAR DUE -----------------
     if (user.wallet.dueAmount > 0) {
-      const adjusted = Math.min(user.wallet.balance, user.wallet.dueAmount);
+      if (applyGst) {
+        const dueNet = Math.min(user.wallet.dueAmount, enteredNet);
+        const dueTotal = dueNet * (1 + gstRate);
 
-      user.wallet.balance -= adjusted;
-      user.wallet.dueAmount -= adjusted;
+        user.wallet.balance -= dueTotal;
+        user.wallet.dueAmount -= dueNet;
 
-      user.wallet.transactions.push({
-        amount: adjusted,
-        type: "debit",
-        source: "system",
-        reason: "Due adjustment"
-      });
+        user.wallet.transactions.push({
+          amount: dueTotal,
+          type: "debit",
+          source: "system",
+          reason: "Due adjustment (incl GST)"
+        });
 
-      if (user.wallet.dueAmount === 0) {
-        user.wallet.dueReason = null;
+        if (user.wallet.dueAmount === 0) {
+          user.wallet.dueReason = null;
+        }
+      } else {
+        const adjusted = Math.min(user.wallet.balance, user.wallet.dueAmount);
+
+        user.wallet.balance -= adjusted;
+        user.wallet.dueAmount -= adjusted;
+
+        user.wallet.transactions.push({
+          amount: adjusted,
+          type: "debit",
+          source: "system",
+          reason: "Due adjustment"
+        });
+
+        if (user.wallet.dueAmount === 0) {
+          user.wallet.dueReason = null;
+        }
       }
     }
 
     user.wallet.transactions.push({
-      amount: amt,
+      amount: paidTotal,
       type: "credit",
       source: "razorpay",
       reason: "Wallet recharge"
@@ -145,7 +167,7 @@ router.post("/verify", authMiddleware, async (req, res) => {
 
     await sendWalletTransactionEmail({
       to: user.email,
-      amount: amt,
+      amount: paidTotal,
       type: "credit",
       source: "razorpay",
       reason: "Wallet recharge",
@@ -171,7 +193,8 @@ router.post(
   async (req, res) => {
     const { userId, amount, reason } = req.body;
 
-    if (!amount || !reason) {
+    const enteredNet = Number(amount);
+    if (!enteredNet || enteredNet <= 0 || !reason) {
       return res.status(400).json({ message: "Amount and reason required" });
     }
 
@@ -184,11 +207,27 @@ router.post(
       user.wallet = { balance: 0, transactions: [] };
     }
 
-    user.wallet.balance -= Number(amount);
+    const gstRate = 0.18;
+    const totalToDeduct = enteredNet * (1 + gstRate);
+
+    if (user.wallet.balance < totalToDeduct) {
+      return res.status(400).json({ message: "Insufficient wallet balance" });
+    }
+
+    user.wallet.balance -= totalToDeduct;
+
+    // Apply wallet deduction against due first (net), so client due alert updates correctly.
+    if (Number(user.wallet.dueAmount || 0) > 0) {
+      const dueNet = Math.min(Number(user.wallet.dueAmount || 0), enteredNet);
+      user.wallet.dueAmount = Number(user.wallet.dueAmount || 0) - dueNet;
+      if (user.wallet.dueAmount === 0) {
+        user.wallet.dueReason = null;
+      }
+    }
 
     user.wallet.transactions.push({
       type: "debit",
-      amount: Number(amount),
+      amount: totalToDeduct,
       reason,
       source: "admin"
     });
