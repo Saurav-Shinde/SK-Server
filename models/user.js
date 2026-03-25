@@ -10,6 +10,9 @@ const userSchema = new mongoose.Schema(
       index: true,
     },
 
+    phoneNumber: { type: String, default: "", trim: true, index: true },
+    phoneVerified: { type: Boolean, default: false },
+
     email: {
       type: String,
       required: true,

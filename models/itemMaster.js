@@ -44,5 +44,5 @@ const itemMasterSchema = new mongoose.Schema(
 export default mongoose.model(
   "ItemMaster",
   itemMasterSchema,
-  "itemmaster"
+  "itemmasters"
 );

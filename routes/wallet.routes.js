@@ -1,6 +1,7 @@
 import express from "express";
 import Razorpay from "razorpay";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import User from "../models/user.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { sendWalletTransactionEmail } from "../utils/walletMailer.js";
@@ -279,17 +280,16 @@ router.post("/pay", authMiddleware, async (req, res) => {
 
     /* ================= CREATE ORDER ================= */
     /* ================= NORMALIZE ITEMS FROM BREAKDOWN ================= */
+    const toNum = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 0;
+    };
 
-const normalizedItems = items.map(item => {
+    const normalizedItems = items.map((item) => {
 
-  let breakdown = item.breakdown;
+      let breakdown = item.breakdown;
 
-  // 🔥 FORCE SAFE OBJECT CONVERSION
-  if (typeof breakdown === "string") {
-    try {
-      breakdown = JSON.parse(breakdown);
-    } catch {
-      // convert JS object string -> real object
+      // 🔥 FORCE SAFE OBJECT CONVERSION
       if (typeof breakdown === "string") {
         try {
           breakdown = JSON.parse(breakdown);
@@ -297,36 +297,54 @@ const normalizedItems = items.map(item => {
           breakdown = [];
         }
       }
-    }
-  }
 
-  if (!Array.isArray(breakdown)) breakdown = [];
+      if (!Array.isArray(breakdown)) breakdown = [];
 
-  breakdown = breakdown.map(r => ({
-    item: String(r.item || ""),
-    type: String(r.type || ""),
-    qty: Number(r.qty || 0),
-    uom: String(r.uom || ""),
-    cost: Number(r.cost || 0),
-    level: Number(r.level || 0)
-  }));
+      breakdown = breakdown.map((r) => ({
+        item: String(r.item || ""),
+        type: String(r.type || ""),
+        qty: Number(r.qty || 0),
+        uom: String(r.uom || ""),
+        cost: Number(r.cost || 0),
+        level: Number(r.level || 0),
+      }));
 
-    return {
-    dish: item.dish,
-    qty: Number(item.qty || 1),   // TRUST FRONTEND
-    price: Number(item.price) || 0,
-    total: Number(item.total) || 0,
-    breakdown
-  };
-});
+      // Procurement rows are used for inventory updates after payment.
+      // They may include nested SUBRECIPE rows; we only act on INGREDIENT rows.
+      let procurement = item.procurement;
+      if (typeof procurement === "string") {
+        try {
+          procurement = JSON.parse(procurement);
+        } catch {
+          procurement = [];
+        }
+      }
+      if (!Array.isArray(procurement)) procurement = [];
+
+      procurement = procurement.map((r) => ({
+        itemName: String(r.itemName || r.item || "").trim(),
+        type: String(r.type || ""),
+        requiredQty: toNum(r.requiredQty),
+        inventoryQty: toNum(r.inventoryQty),
+        procureQty: toNum(r.procureQty),
+        uom: String(r.uom || ""),
+        level: toNum(r.level),
+      }));
+
+      return {
+        dish: item.dish,
+        qty: Number(item.qty || 1), // TRUST FRONTEND
+        price: Number(item.price) || 0,
+        total: Number(item.total) || 0,
+        breakdown,
+        procurement,
+      };
+    });
 
 
-console.log("========= ORDER DEBUG =========");
-console.log(JSON.stringify(normalizedItems, null, 2));
-console.log("TYPE CHECK:");
+
 normalizedItems.forEach((item, i) => {
-  console.log("item", i, typeof item);
-  console.log("breakdown is array:", Array.isArray(item.breakdown));
+  
   if (item.breakdown)
     item.breakdown.forEach((b, j) =>
       console.log("  row", j, typeof b, b)
@@ -342,128 +360,187 @@ const order = await Order.create({
   isSeenByAdmin: false
 });
 
-    /* ================= INVENTORY PROCUREMENT ================= */
+    /* ================= INVENTORY LEDGER UPDATE (PAYMENT SUCCESS) ================= */
     try {
-      // 1️⃣ Aggregate required quantity per ingredient name (across all dishes)
-      const requiredByName = new Map(); // key: itemNameLower -> { displayName, uom, requiredQty }
+      // We MUST compute inventory updates from latest DB availableQty inside a transaction.
+      // Procurement payload can be used only to get requiredQty totals.
+      const normalizeName = (raw) =>
+        String(raw || "")
+          .replace("SR:", "")
+          .trim()
+          .toLowerCase();
 
+      // keyLower -> { ingredientName, requiredQty }
+      const requiredByIngredient = new Map();
+
+      // 1) Prefer procurement payload (backward compatible fallback below).
+      let hasProcurement = false;
       for (const line of normalizedItems) {
-        for (const row of line.breakdown || []) {
-          if (!row.item || row.type !== "INGREDIENT") continue;
-          const key = String(row.item).trim().toLowerCase();
-          if (!key) continue;
+        for (const row of line.procurement || []) {
+          if (!row || row.type !== "INGREDIENT") continue;
+          hasProcurement = true;
 
-          const entry = requiredByName.get(key) || {
-            displayName: row.item,
-            uom: row.uom,
-            requiredQty: 0
-          };
+          const ingredientNameRaw = row.itemName || row.item || "";
+          const ingredientNameNorm = normalizeName(ingredientNameRaw);
+          if (!ingredientNameNorm) continue;
 
-          entry.requiredQty += Number(row.qty || 0);
-          requiredByName.set(key, entry);
+          const entry =
+            requiredByIngredient.get(ingredientNameNorm) || {
+              // Keep a normalized display name so ItemMaster lookup is consistent
+              ingredientName: String(ingredientNameRaw || "").replace("SR:", "").trim(),
+              requiredQty: 0,
+            };
+
+          entry.requiredQty += Number(row.requiredQty || 0);
+          requiredByIngredient.set(ingredientNameNorm, entry);
         }
       }
 
-      if (requiredByName.size) {
-        // 2️⃣ Resolve ItemMaster docs by itemName
-        const names = [...requiredByName.values()].map(e => e.displayName);
-        const itemDocs = await ItemMaster.find({
-          itemName: {
-            $in: names.map(n => new RegExp(`^${escapeRegex(n)}$`, "i"))
+      // 2) Backward compatibility: if no procurement payload, derive requiredQty from breakdown.
+      if (!hasProcurement || requiredByIngredient.size === 0) {
+        for (const line of normalizedItems) {
+          for (const row of line.breakdown || []) {
+            if (!row || row.type !== "INGREDIENT") continue;
+            const ingredientNameNorm = normalizeName(row.item);
+            if (!ingredientNameNorm) continue;
+
+            const entry =
+              requiredByIngredient.get(ingredientNameNorm) || {
+                ingredientName: String(row.item || "").replace("SR:", "").trim(),
+                requiredQty: 0,
+              };
+
+            // row.qty is for 1x recipe; multiply by ordered dish qty
+            entry.requiredQty += Number(row.qty || 0) * Number(line.qty || 1);
+            requiredByIngredient.set(ingredientNameNorm, entry);
           }
-        }).lean();
+        }
+      }
 
-        const byItemId = new Map(); // itemId -> { nameKey, itemDoc }
-        const byNameKey = new Map(); // nameKey -> itemDoc
+      if (requiredByIngredient.size > 0) {
+        const session = await mongoose.startSession();
+        session.startTransaction();
 
-        itemDocs.forEach(doc => {
-          const key = String(doc.itemName || "").trim().toLowerCase();
-          if (!key) return;
-          byNameKey.set(key, doc);
-          byItemId.set(String(doc._id), { nameKey: key, itemDoc: doc });
-        });
+        try {
+          const keys = [...requiredByIngredient.keys()]; // normalized names
+          const ingredientNames = keys
+            .map((k) => requiredByIngredient.get(k)?.ingredientName)
+            .filter(Boolean);
 
-        // 3️⃣ Load existing KitchenInventory for this client
-        const itemIds = [...byItemId.keys()];
-        const invDocs = itemIds.length
-          ? await KitchenInventory.find({
-              clientId: user._id,
-              ingredientId: { $in: itemIds }
-            }).lean()
-          : [];
+          // Resolve ItemMaster by itemName (to get ingredientId)
+          const itemDocs = await ItemMaster.find({
+            itemName: {
+              $in: ingredientNames.map((n) =>
+                new RegExp(`^${escapeRegex(String(n))}$`, "i")
+              ),
+            },
+          }).lean();
 
-        const invByItemId = new Map(); // itemId -> availableQty
-        invDocs.forEach(doc => {
-          invByItemId.set(String(doc.ingredientId), Number(doc.availableQty || 0));
-        });
-
-        // 4️⃣ Load MinimumPackage records for all items
-        const minPkgDocs = names.length
-          ? await MinimumPackage.find({
-              itemName: {
-                $in: names.map(n => new RegExp(`^${escapeRegex(n)}$`, "i"))
-              }
-            })
-              .select("itemName minPackQty minPackCost")
-              .lean()
-          : [];
-
-        const minPkgByNameKey = new Map();
-        minPkgDocs.forEach(doc => {
-          const key = String(doc.itemName || "").trim().toLowerCase();
-          if (!key) return;
-          minPkgByNameKey.set(key, {
-            minPackQty: Number(doc.minPackQty || 0),
-            minPackCost: Number(doc.minPackCost || 0)
+          const byNameKey = new Map();
+          itemDocs.forEach((doc) => {
+            const key = normalizeName(doc.itemName);
+            if (!key) return;
+            byNameKey.set(key, doc);
           });
-        });
 
-        // 5️⃣ Apply procurement algorithm and upsert KitchenInventory
-        for (const [nameKey, agg] of requiredByName.entries()) {
-          const itemDoc = byNameKey.get(nameKey);
-          if (!itemDoc) continue;
+          // Resolve minPackQty per ingredientName
+          const minPkgDocs = await MinimumPackage.find({
+            itemName: {
+              $in: ingredientNames.map((n) =>
+                new RegExp(`^${escapeRegex(String(n))}$`, "i")
+              ),
+            },
+          })
+            .select("itemName minPackQty")
+            .lean();
 
-          const itemId = String(itemDoc._id);
-          const requiredQty = Number(agg.requiredQty || 0);
-          if (!requiredQty) continue;
+          const minPackByNameKey = new Map();
+          minPkgDocs.forEach((doc) => {
+            const key = normalizeName(doc.itemName);
+            if (!key) return;
+            minPackByNameKey.set(key, Number(doc.minPackQty || 0));
+          });
 
-          const invQty = Number(invByItemId.get(itemId) || 0);
-          const pkg = minPkgByNameKey.get(nameKey) || {};
-          const minPackQty = Number(pkg.minPackQty || 0) || 1; // fallback 1 to avoid /0
-
-          // stockUsed = min(requiredQty, inventoryQty)
-          const stockUsed = Math.min(requiredQty, invQty);
-          const netRequired = requiredQty - stockUsed;
-
-          // packets = ceil(netRequired / minPackQty)
-          const packets =
-            netRequired <= 0 ? 0 : Math.ceil(netRequired / minPackQty);
-
-          // procureQty = packets * minPackQty
-          const procureQty = packets * minPackQty;
-
-          // remainingInventory = inventoryQty + procureQty - requiredQty
-          const remainingInventory = invQty + procureQty - requiredQty;
-
-          // Upsert KitchenInventory
-          const existing = invDocs.find(
-            d =>
-              String(d.clientId) === String(user._id) &&
-              String(d.ingredientId) === itemId
+          console.log("==== [InventoryLedger] Update Start ====");
+          console.log(
+            "[InventoryLedger] requiredByIngredient:",
+            [...requiredByIngredient.entries()]
           );
 
-          if (existing) {
-            await KitchenInventory.updateOne(
-              { _id: existing._id },
-              { $set: { availableQty: remainingInventory } }
-            );
-          } else {
-            await KitchenInventory.create({
-              clientId: user._id,
-              ingredientId: itemId,
-              availableQty: remainingInventory
+          for (const [nameKey, agg] of requiredByIngredient.entries()) {
+            const itemDoc = byNameKey.get(nameKey);
+            if (!itemDoc) {
+              console.warn(
+                "[InventoryLedger] Ingredient not found in ItemMaster:",
+                agg.ingredientName
+              );
+              continue;
+            }
+
+            const ingredientId = itemDoc._id;
+            const requiredQty = Math.max(Number(agg.requiredQty || 0), 0);
+            if (requiredQty === 0) continue;
+
+            const minPackQtyRaw = minPackByNameKey.get(nameKey);
+            const minPackQty = Number(minPackQtyRaw || 0) || 1;
+
+            // IMPORTANT: read latest availableQty from DB (inside transaction)
+            const invDoc = await KitchenInventory.findOne(
+              { clientId: user._id, ingredientId },
+              { availableQty: 1 }
+            ).session(session);
+
+            const availableQty = Math.max(Number(invDoc?.availableQty || 0), 0);
+
+            // Ledger flow:
+            // stockUsed = min(requiredQty, availableQty)
+            // remainingAfterUse = availableQty - stockUsed
+            // netRequired = requiredQty - stockUsed
+            // packets = ceil(netRequired / minPackQty)
+            // procureQty = packets * minPackQty
+            // finalInventory = remainingAfterUse + (procureQty - netRequired)
+            const stockUsed = Math.min(requiredQty, availableQty);
+            const remainingAfterUse = availableQty - stockUsed; // >= 0
+            const netRequired = requiredQty - stockUsed; // >= 0
+            const packets = netRequired <= 0 ? 0 : Math.ceil(netRequired / minPackQty);
+            const procureQty = packets * minPackQty;
+            // Purchased quantity (procureQty) is consumed to fulfill netRequired.
+            // Leftover stored back into inventory is (procureQty - netRequired).
+            const leftoverAfterPurchase = procureQty - netRequired; // >= 0
+            const finalInventory = remainingAfterUse + leftoverAfterPurchase;
+
+            if (finalInventory < 0) {
+              throw new Error(
+                `[InventoryLedger] Negative finalInventory for ${agg.ingredientName}`
+              );
+            }
+
+            console.log("[InventoryLedger] ingredient update:", {
+              ingredientName: agg.ingredientName,
+              requiredQty,
+              availableQty,
+              minPackQty,
+              stockUsed,
+              netRequired,
+              packets,
+              procureQty,
+              leftoverAfterPurchase,
+              finalInventory,
             });
+
+            await KitchenInventory.updateOne(
+              { clientId: user._id, ingredientId },
+              { $set: { availableQty: finalInventory }, $setOnInsert: { clientId: user._id, ingredientId } },
+              { upsert: true, session }
+            );
           }
+
+          await session.commitTransaction();
+        } catch (invTxErr) {
+          await session.abortTransaction();
+          throw invTxErr;
+        } finally {
+          session.endSession();
         }
       }
     } catch (invErr) {

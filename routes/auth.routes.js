@@ -1,6 +1,12 @@
 import express from 'express'
 import jwt from 'jsonwebtoken'
-import { login, signup,getCredits } from '../controllers/auth.controller.js'
+import {
+  login,
+  signup,
+  getCredits,
+  requestPasswordReset,
+  confirmPasswordReset
+} from '../controllers/auth.controller.js'
 import { authMiddleware } from "../middleware/auth.js";
 
 const router = express.Router()
@@ -32,6 +38,10 @@ const sanitizeUser = (user) => ({
 router.post('/signup', signup )
 router.get("/credits", authMiddleware, getCredits);
 router.post('/login', login)
+
+// Password reset flow
+router.post('/password-reset/request', requestPasswordReset)
+router.post('/password-reset/confirm', confirmPasswordReset)
 
 export default router
 

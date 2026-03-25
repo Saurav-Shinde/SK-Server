@@ -47,16 +47,19 @@ const vendorSchema = new mongoose.Schema(
     },
 
     // PAN number (ABCDE1234F)
-    pan: { 
+    pan: {
       type: String,
       required: true,
       trim: true,
       uppercase: true,
       validate: {
-        validator: v => /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(v),
-        message: "Invalid PAN format"
-      }
-    }
+        validator: (v) => /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(v),
+        message: "Invalid PAN format",
+      },
+    },
+
+    phoneNumber: { type: String, default: "", trim: true, index: true },
+    phoneVerified: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
