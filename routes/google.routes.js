@@ -41,20 +41,22 @@ router.get("/callback", async (req, res) => {
   if (!oauth2) {
     return res.status(500).send("OAuth not configured");
   }
+
   if (!code) {
     return res.status(400).send("Missing code parameter");
   }
 
   try {
     const { tokens } = await oauth2.getToken(code);
+
+    console.log("TOKENS RECEIVED:", tokens); // ✅ MOVE HERE
+
     await storeTokens(tokens);
 
-    res.send(
-      "<h2>Google Calendar connected successfully</h2><p>You can close this window. The server will use this authorization for calendar operations.</p>"
-    );
+    res.send("Google Calendar connected successfully ✅");
   } catch (err) {
-    console.error("[GoogleError]", err?.message || err);
-    res.status(500).send(`Authorization failed: ${err.message}`);
+    console.error("[GoogleError]", err);
+    res.status(500).send("Authorization failed");
   }
 });
 

@@ -36,6 +36,7 @@ import recipeHierarchyRoutes from "./routes/recipeHierarchy.routes.js";
 import creditNoteRoutes from "./routes/creditNote.routes.js";
 import menuEntryRoutes from "./routes/menuEntry.routes.js";
 import brandStockRoutes from "./routes/brandStock.routes.js";
+import stockUpdateRoutes from "./routes/stockUpdate.routes.js";
 
 dotenv.config()
 validateEnv();
@@ -91,7 +92,6 @@ app.options("*", cors());
 
 
 
-
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
@@ -128,6 +128,7 @@ app.use("/api", recipeHierarchyRoutes);
 app.use("/api/credit-notes", creditNoteRoutes);
 app.use("/api", menuEntryRoutes);
 app.use("/api", brandStockRoutes);
+app.use("/api", stockUpdateRoutes);
 app.use("/api/google", googleRoutes);
 
 app.get("/debug/db", async (req, res) => {

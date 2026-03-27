@@ -1,5 +1,7 @@
 import { google } from "googleapis";
 import GoogleToken from "../models/googleToken.model.js";
+import dotenv from "dotenv";
+dotenv.config();
 
 function buildOAuthClient() {
   return new google.auth.OAuth2(
@@ -35,23 +37,31 @@ export async function hasStoredRefreshToken() {
  * Loads refresh_token from DB, sets it on OAuth2 client.
  * OAuth2Client auto-refreshes access_token when expired; no manual refresh needed for each call.
  */
-export async function getAuthenticatedCalendarClient() {
-  const tokenDoc = await GoogleToken.findOne({ provider: "google_calendar" });
 
-  if (!tokenDoc?.refreshToken) {
+
+export const getAuthenticatedCalendarClient = async () => {
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+  );
+
+  // 🔥 TEMP FIX (do this NOW)
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+
+  if (!refreshToken) {
     throw new Error("No refresh token stored");
   }
 
-  const oauth2Client = buildOAuthClient();
-
-  // ONLY SET REFRESH TOKEN
   oauth2Client.setCredentials({
-    refresh_token: tokenDoc.refreshToken,
+    refresh_token: refreshToken,
   });
 
-  // Google will auto refresh internally when API called
-  return google.calendar({ version: "v3", auth: oauth2Client });
-}
+  return google.calendar({
+    version: "v3",
+    auth: oauth2Client,
+  });
+};
 
 async function createCalendarClientFromDB() {
   const tokenDoc = await GoogleToken.findOne({ provider: "google_calendar" });
@@ -100,4 +110,18 @@ export const storeTokens = async (tokens, email = "primary") => {
   console.log("[GoogleAuth] Refresh token stored");
 };
 
+
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GOOGLE_OAUTH_CLIENT_ID,
+  process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+  process.env.GOOGLE_OAUTH_REDIRECT_URI
+);
+
+const url = oauth2Client.generateAuthUrl({
+  access_type: "offline",
+  prompt: "consent",
+  scope: ["https://www.googleapis.com/auth/calendar"],
+});
+
+console.log("Open this URL:", url);
 export { getOAuth2Client };
